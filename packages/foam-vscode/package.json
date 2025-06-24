@@ -678,7 +678,6 @@
     "test:unit": "yarn test-setup && node ./out/test/run-tests.js --unit --exclude-specs",
     "test:unit-with-specs": "yarn test-setup && node ./out/test/run-tests.js --unit",
     "test:e2e": "yarn test-setup && node ./out/test/run-tests.js --e2e",
-    "test:tdd": "yarn build:node && jest --runInBand",
     "lint": "dts lint src",
     "clean": "rimraf out",
     "watch": "nodemon --watch 'src/**/*.ts' --exec 'yarn build' --ext ts",
