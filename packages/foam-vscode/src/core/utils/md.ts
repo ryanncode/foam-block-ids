@@ -1,6 +1,29 @@
 import matter from 'gray-matter';
 import { Position } from '../model/position'; // Add Position import to the top
 
+/**
+ * Gets the raw text of a node from the source markdown.
+ * @param node The AST node with position info.
+ * @param markdown The full markdown source string.
+ * @returns The raw text corresponding to the node.
+ */
+export function getNodeText(
+  node: { position?: { start: { offset?: number }; end: { offset?: number } } },
+  markdown: string
+): string {
+  if (
+    !node.position ||
+    node.position.start.offset == null ||
+    node.position.end.offset == null
+  ) {
+    return '';
+  }
+  return markdown.substring(
+    node.position.start.offset,
+    node.position.end.offset
+  );
+}
+
 export function getExcerpt(
   markdown: string,
   maxLines: number

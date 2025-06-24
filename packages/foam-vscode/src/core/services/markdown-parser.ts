@@ -1,6 +1,7 @@
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { Point, Node, Position as AstPosition, Parent } from 'unist';
 import unified from 'unified';
+import { getNodeText } from '../utils/md';
 import markdownParse from 'remark-parse';
 import wikiLinkPlugin from 'remark-wiki-link';
 import frontmatterPlugin from 'remark-frontmatter';
@@ -423,19 +424,10 @@ export const createBlockIdPlugin = (): ParserPlugin => {
     return matches ? matches[1] : undefined;
   };
 
-  // Gets the raw text of a node from the source markdown
-  const getNodeText = (node: Node, markdown: string): string => {
-    return markdown.substring(
-      node.position!.start.offset!,
-      node.position!.end.offset!
-    );
-  };
-
   return {
     name: 'block-id',
     onWillVisitTree: () => {
       processedNodes.clear();
-      slugger.reset();
     },
     visit: (node, note, markdown, index, parent, ancestors) => {
       // Skip heading nodes and all their descendants; only the sectionsPlugin should handle headings and their block IDs
@@ -467,7 +459,9 @@ export const createBlockIdPlugin = (): ParserPlugin => {
         const lastLine = listLines[listLines.length - 1];
         const fullLineBlockId = getLastBlockId(lastLine.trim());
 
-        if (fullLineBlockId && /^\s*(\^[\w.-]+\s*)+$/.test(lastLine.trim())) {
+        // Regex to match a line that consists only of one or more block IDs
+        const fullLineBlockIdPattern = /^\s*(\^[\w.-]+\s*)+$/;
+        if (fullLineBlockId && fullLineBlockIdPattern.test(lastLine.trim())) {
           // Create section for the entire list
           const sectionLabel = listLines
             .slice(0, listLines.length - 1)
