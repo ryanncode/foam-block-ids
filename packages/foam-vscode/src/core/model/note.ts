@@ -117,24 +117,27 @@ export abstract class Resource {
 
   public static findSection(
     resource: Resource,
-    sectionId: string
-  ): Section | undefined {
-    if (sectionId === '') {
-      // The whole-document section has an empty canonicalId
-      return resource.sections.find(s => s.canonicalId === '');
-    }
-    // We remove the # from the beginning of the section if it exists
-    const id = sectionId.startsWith('#') ? sectionId.slice(1) : sectionId;
-    if (id === '') {
-      // A raw '#' link should resolve to the first section (usually the whole doc)
-      return resource.sections[0];
-    }
-    for (const section of resource.sections) {
-      // Defensive check for linkableIds for robustness.
-      if (section.linkableIds?.includes(id)) {
-        return section;
-      }
-    }
-    return undefined;
+    fragment: string
+  ): Section | null {
+    if (!fragment) return null;
+    // Normalize for robust matching (legacy logic)
+    const normalize = (str: string | undefined) =>
+      str
+        ? str
+            .toLocaleLowerCase()
+            .replace(/\s+/g, '-')
+            .replace(/[^a-z0-9_-]/g, '')
+        : '';
+    const normFragment = normalize(fragment);
+    return (
+      resource.sections.find(s => {
+        // For headings with blockId, match slug, caret-prefixed blockId, or blockId without caret
+        if (s.canonicalId && s.linkableIds) {
+          if (s.linkableIds.includes(fragment)) return true;
+          if (s.linkableIds.includes(normFragment)) return true;
+        }
+        return false;
+      }) ?? null
+    );
   }
 }

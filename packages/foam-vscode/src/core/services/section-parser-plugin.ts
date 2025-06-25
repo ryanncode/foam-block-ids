@@ -80,6 +80,17 @@ export const createSectionParserPlugin = (): ParserPlugin => {
         const level = (node as any).depth;
         let label = getTextFromChildren(node);
         if (!label || !level) return;
+        // Skip the first depth-1 heading (title) at the top of the file
+        if (
+          level === 1 &&
+          (!note.sections || note.sections.length === 0) &&
+          (!sectionStack || sectionStack.length === 0) &&
+          node.position &&
+          node.position.start.line === 1
+        ) {
+          // Do not push to sectionStack, do not add as section
+          return;
+        }
         // Extract block ID if present at end of heading
         const inlineBlockIdRegex = /(?:^|\s)(\^[\w.-]+)\s*$/;
         const match = label.match(inlineBlockIdRegex);
@@ -97,7 +108,10 @@ export const createSectionParserPlugin = (): ParserPlugin => {
           const slug = slugger.slug(popped.label);
           const linkableIds = [slug, popped.label];
           if (popped.blockId) {
-            linkableIds.push(popped.blockId, popped.blockId.substring(1));
+            // Always include both ^block-id and block-id (no duplicates)
+            if (!linkableIds.includes(popped.blockId)) linkableIds.push(popped.blockId);
+            const noCaret = popped.blockId.startsWith('^') ? popped.blockId.substring(1) : popped.blockId;
+            if (!linkableIds.includes(noCaret)) linkableIds.push(noCaret);
           }
           // Section range: from heading to line before next heading
           const lines = noteSource.split('\n');
@@ -150,7 +164,7 @@ export const createSectionParserPlugin = (): ParserPlugin => {
               label,
               range: Range.create(listStart, 0, blockIdLine, 0),
               canonicalId: blockId,
-              linkableIds: [blockId, blockIdWithCaret],
+              linkableIds: [blockIdWithCaret, blockId],
             });
             // Mark all nodes in the list and the block ID node as processed
             visit(prev as any, (n: Node) => {
@@ -168,7 +182,7 @@ export const createSectionParserPlugin = (): ParserPlugin => {
               label,
               range: astPositionToFoamRange(prev.position!),
               canonicalId: blockId,
-              linkableIds: [blockId, blockIdWithCaret],
+              linkableIds: [blockIdWithCaret, blockId],
             });
             visit(prev as any, (n: Node) => {
               processedNodes.add(n);
@@ -193,7 +207,7 @@ export const createSectionParserPlugin = (): ParserPlugin => {
             label,
             range: astPositionToFoamRange(node.position!),
             canonicalId: blockId,
-            linkableIds: [blockId, blockIdWithCaret],
+            linkableIds: [blockIdWithCaret, blockId],
           });
           processedNodes.add(node);
           // Mark all child paragraphs as processed (legacy behavior)
@@ -236,7 +250,9 @@ export const createSectionParserPlugin = (): ParserPlugin => {
         const slug = slugger.slug(popped.label);
         const linkableIds = [slug, popped.label];
         if (popped.blockId) {
-          linkableIds.push(popped.blockId, popped.blockId.substring(1));
+          if (!linkableIds.includes(popped.blockId)) linkableIds.push(popped.blockId);
+          const noCaret = popped.blockId.startsWith('^') ? popped.blockId.substring(1) : popped.blockId;
+          if (!linkableIds.includes(noCaret)) linkableIds.push(noCaret);
         }
         let endLine = fileEndPosition.line;
         while (endLine > popped.start.line && lines[endLine].trim() === '') {

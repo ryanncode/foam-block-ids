@@ -63,10 +63,10 @@ export const markdownItWikilinkEmbed = (
           return `![[${wikilinkTarget}]]`;
         }
 
+        // Restore legacy cyclic detection: only by note path (not fragment)
         const cyclicLinkDetected = refsStack.includes(
           includedNote.uri.path.toLocaleLowerCase()
         );
-
         if (cyclicLinkDetected) {
           return `
  <div class="foam-cyclic-link-warning">
@@ -80,7 +80,6 @@ export const markdownItWikilinkEmbed = (
  </div>
            `;
         }
-
         refsStack.push(includedNote.uri.path.toLocaleLowerCase());
 
         const htmlContent = getNoteContent(
@@ -116,12 +115,9 @@ function getNoteContent(
   switch (includedNote.type) {
     case 'note': {
       const { noteScope, noteStyle } = retrieveNoteConfig(noteEmbedModifier);
-
       const extractor: EmbedNoteExtractor =
         noteScope === 'content' ? contentExtractor : fullExtractor;
-
       content = extractor(includedNote, linkFragment, parser, workspace);
-
       const formatter: EmbedNoteFormatter =
         noteStyle === 'card' ? cardFormatter : inlineFormatter;
       toRender = formatter(content, md);
@@ -278,28 +274,32 @@ function contentExtractor(
   workspace: FoamWorkspace
 ): string {
   let noteText = readFileSync(note.uri.toFsPath()).toString();
+  // Find the specific section or block being linked to.
   let section = Resource.findSection(note, linkFragment);
   if (!linkFragment) {
     // If no fragment is provided, default to the first section (usually the main title)
+    // to extract the content of the note, excluding the title.
     section = note.sections.length ? note.sections[0] : null;
-  }
-  if (isSome(section)) {
-    if (newSectionIsHeading(section)) {
-      let rows = noteText.split('\n');
-      const isLastLineHeading = rows[section.range.end.line]?.match(/^\s*#+\s/);
-      rows = rows.slice(
-        section.range.start.line,
-        section.range.end.line + (isLastLineHeading ? 0 : 1)
-      );
-      rows.shift(); // Remove the heading itself
-      noteText = rows.join('\n');
-    } else {
-      // For block-level embeds (e.g., a list item with a ^block-id),
-      // extract the content of just that block using its range.
-      const rows = noteText.split('\n');
-      noteText = rows
-        .slice(section.range.start.line, section.range.end.line + 1)
-        .join('\n');
+    if (isSome(section)) {
+      if (newSectionIsHeading(section)) {
+        // For headings, extract the content *including* the heading line (card mode legacy behavior).
+        let rows = noteText.split('\n');
+        const isLastLineHeading =
+          rows[section.range.end.line]?.match(/^\s*#+\s/);
+        rows = rows.slice(
+          section.range.start.line,
+          section.range.end.line + (isLastLineHeading ? 0 : 1)
+        );
+        // DO NOT remove the heading itself in card mode: include heading line
+        noteText = rows.join('\n');
+      } else {
+        // For block-level embeds (e.g., a list item with a ^block-id),
+        // extract the content of just that block using its range.
+        const rows = noteText.split('\n');
+        noteText = rows
+          .slice(section.range.start.line, section.range.end.line + 1)
+          .join('\n');
+      }
     }
   } else {
     // If no fragment, or fragment not found as a section,
