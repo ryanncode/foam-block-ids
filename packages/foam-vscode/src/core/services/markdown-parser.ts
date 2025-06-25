@@ -575,8 +575,7 @@ export const createBlockIdPlugin = (): ParserPlugin => {
               sectionRange = astPositionToFoamRange(block.position!);
               break;
             // For blocks that may have a full-line ID on the next line, we need to exclude that line from the label and range.
-            case 'list':
-            case 'blockquote': {
+            case 'list': {
               const rawText = getNodeText(block, markdown);
               const lines = rawText.split('\n');
               if (idNode) lines.pop(); // Remove the ID line if it was a full-line ID.
@@ -598,7 +597,43 @@ export const createBlockIdPlugin = (): ParserPlugin => {
             }
             // For all other block types, the label and range cover the entire node.
             case 'table':
-            case 'code':
+            case 'code': {
+              sectionLabel = getNodeText(block, markdown);
+              sectionId = blockId.substring(1);
+              const startPos = astPointToFoamPosition(block.position!.start);
+              const lines = sectionLabel.split('\n');
+              const endPos = Position.create(
+                startPos.line + lines.length - 1,
+                lines[lines.length - 1].length
+              );
+              sectionRange = Range.create(
+                startPos.line,
+                startPos.character,
+                endPos.line,
+                endPos.character
+              );
+              break;
+            }
+            case 'blockquote': {
+              const rawText = getNodeText(block, markdown);
+              const lines = rawText.split('\n');
+              lines.pop();
+              sectionLabel = lines.join('\n');
+              sectionId = blockId.substring(1);
+              const startPos = astPointToFoamPosition(block.position!.start);
+              const lastLine = lines[lines.length - 1];
+              const endPos = Position.create(
+                startPos.line + lines.length - 1,
+                lastLine.length - 1
+              );
+              sectionRange = Range.create(
+                startPos.line,
+                startPos.character,
+                endPos.line,
+                endPos.character
+              );
+              break;
+            }
             case 'paragraph':
             default: {
               sectionLabel = getNodeText(block, markdown);
