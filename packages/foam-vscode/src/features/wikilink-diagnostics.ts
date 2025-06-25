@@ -233,9 +233,9 @@ function createUnknownSectionDiagnostic(
 ): vscode.Diagnostic {
   const range = Range.create(
     link.range.start.line,
-    link.range.start.character + target.length + 2,
+    link.range.start.character + 2 + target.length + 1,
     link.range.end.line,
-    link.range.end.character
+    link.range.end.character - 2
   );
   return {
     code: UNKNOWN_SECTION_CODE,
@@ -404,12 +404,7 @@ const createReplaceSectionCommand = (
     arguments: [
       {
         value: replacementValue,
-        range: new vscode.Range(
-          diagnostic.range.start.line,
-          diagnostic.range.start.character + 1,
-          diagnostic.range.end.line,
-          diagnostic.range.end.character - 2
-        ),
+        range: diagnostic.range,
       },
     ],
   };

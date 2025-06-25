@@ -131,7 +131,49 @@ export const createSectionParserPlugin = (): ParserPlugin => {
           start,
           ...(blockId ? { blockId } : {}),
         });
-      } else if (
+      }
+
+      // Logic for full-line block IDs, applied to the preceding sibling
+      if (
+        node.type === 'paragraph' &&
+        index > 0 &&
+        parent &&
+        !processedNodes.has(node)
+      ) {
+        const text = getTextFromChildren(node).trim();
+        const fullLineBlockIdRegex = /^\^[:\w.-]+$/;
+        if (fullLineBlockIdRegex.test(text)) {
+          const precedingNode = parent.children[index - 1];
+          // Headings handle their own block IDs, so we don't apply them here.
+          if (
+            precedingNode &&
+            precedingNode.type !== 'heading' &&
+            !processedNodes.has(precedingNode)
+          ) {
+            const blockIdWithCaret = text;
+            const blockId = blockIdWithCaret.substring(1);
+            // For full-line blocks, the label is the raw text of the preceding node.
+            const label = getNodeText(precedingNode, markdown).trim();
+
+            note.sections.push({
+              label: label,
+              range: astPositionToFoamRange(precedingNode.position!),
+              canonicalId: blockId,
+              linkableIds: [blockId],
+            });
+
+            // Mark both the content block and the ID paragraph as processed.
+            visit(precedingNode as any, (n: Node) => {
+              processedNodes.add(n);
+            });
+            processedNodes.add(node);
+            return; // Exit to prevent further processing of the ID paragraph.
+          }
+        }
+      }
+
+      // Logic for inline block IDs on paragraphs and list items
+      if (
         (node.type === 'paragraph' || node.type === 'listItem') &&
         !processedNodes.has(node)
       ) {

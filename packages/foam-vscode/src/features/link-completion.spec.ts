@@ -23,7 +23,7 @@ describe('Link Completion', () => {
     createTestNote({
       root,
       uri: 'file-name.md',
-      sections: ['Section One', 'Section Two'],
+      sections: [{ label: 'Section One' }, { label: 'Section Two' }],
     })
   )
     .set(

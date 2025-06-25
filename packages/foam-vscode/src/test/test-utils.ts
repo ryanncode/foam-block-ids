@@ -7,7 +7,7 @@ import { Range } from '../core/model/range';
 import { URI } from '../core/model/uri';
 import { FoamWorkspace } from '../core/model/workspace';
 import { MarkdownResourceProvider } from '../core/services/markdown-provider';
-import { NoteLinkDefinition, Resource } from '../core/model/note';
+import { NoteLinkDefinition, Resource, Section } from '../core/model/note';
 import { createMarkdownParser } from '../core/services/markdown-parser';
 import GithubSlugger from 'github-slugger';
 
@@ -52,7 +52,7 @@ export const createTestNote = (params: {
   tags?: string[];
   aliases?: string[];
   text?: string;
-  sections?: string[];
+  sections?: Partial<Section>[];
   root?: URI;
   type?: string;
 }): Resource => {
@@ -64,14 +64,21 @@ export const createTestNote = (params: {
     properties: {},
     title: params.title ?? strToUri(params.uri).getBasename(),
     definitions: params.definitions ?? [],
-    sections: (params.sections ?? []).map(label => {
-      const slug = slugger.slug(label);
+    sections: (params.sections ?? []).map((s, i) => {
+      const label = s.label ?? `Section ${i + 1}`;
+      const range = s.range ?? Range.create(i, 0, i + 1, 0);
+      // if canonicalId is provided, use it, otherwise slugify the label
+      const canonicalId =
+        'canonicalId' in s ? s.canonicalId : slugger.slug(label);
+      // if linkableIds are provided, use them, otherwise derive from canonicalId
+      const linkableIds =
+        'linkableIds' in s ? s.linkableIds : canonicalId ? [canonicalId] : [];
       return {
-        label: label,
-        range: Range.create(0, 0, 1, 0),
-        canonicalId: slug,
-        linkableIds: [slug],
-      };
+        label,
+        range,
+        canonicalId,
+        linkableIds,
+      } as Section;
     }),
     tags:
       params.tags?.map(t => ({

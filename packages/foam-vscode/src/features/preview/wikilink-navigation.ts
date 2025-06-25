@@ -86,42 +86,19 @@ export const markdownItWikilinkNavigation = (
             s.linkableIds.includes(lookupId)
           );
 
-          let fragment;
           if (foundSection) {
-            // If the link points to a heading, the fragment is its canonical ID (which is a slug).
-            // We identify a heading by checking if its canonicalId is a slug of its label.
-            const isHeading =
-              toSlug(foundSection.label) === foundSection.canonicalId;
-
-            if (isHeading) {
-              fragment = foundSection.canonicalId;
-            } else {
-              // If it's a block, we need to find the nearest parent heading
-              // to use as the navigation anchor, as blocks don't have anchors.
-              const parentHeading = resource.sections
-                .filter(
-                  s =>
-                    toSlug(s.label) === s.canonicalId && // is a heading
-                    s.range.start.line < foundSection.range.start.line
-                )
-                // Sort headings by line number descending to find the closest one *before* the block.
-                .sort((a, b) => b.range.start.line - a.range.start.line)[0];
-
-              // Use the parent heading's ID if found; otherwise, fall back to a slug of the section.
-              fragment = parentHeading
-                ? parentHeading.canonicalId
-                : toSlug(section);
-            }
+            // The fragment is always the canonicalId of the found section.
+            const fragment = foundSection.canonicalId;
+            finalHref += `#${fragment}`;
           } else {
-            // If no specific section is found, fall back to a slug of the section identifier.
-            fragment = toSlug(section);
+            // If the section doesn't exist, we still add it to the href
+            // to allow for navigation to a placeholder section.
+            finalHref += `#${toSlug(section)}`;
           }
-          // Append the fragment to the base href.
-          finalHref += `#${fragment}`;
         }
 
-        // The visible text of the link is the alias if provided, otherwise the generated link title.
-        const linkText = alias || linkTitle;
+        const linkText =
+          alias || (section ? `${resource.title}#${section}` : resource.title);
 
         return getResourceLink(linkTitle, finalHref, linkText);
       } catch (e) {

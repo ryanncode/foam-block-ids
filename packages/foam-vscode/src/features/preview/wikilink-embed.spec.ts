@@ -1,3 +1,4 @@
+import * as vscode from 'vscode';
 import MarkdownIt from 'markdown-it';
 import { FoamWorkspace } from '../../core/model/workspace';
 import { createMarkdownParser } from '../../core/services/markdown-parser';
@@ -83,7 +84,10 @@ describe('Displaying included notes in preview', () => {
       () => {
         const md = markdownItWikilinkNavigation(
           markdownItWikilinkEmbed(MarkdownIt(), ws, parser),
-          ws
+          ws,
+          {
+            root: vscode.Uri.file('.'),
+          }
         );
         const result = md.render(linkingNote2.content);
         const linkHtml = `<a class='foam-note-link' title='Note A' href='/note-a.md' data-href='/note-a.md'>Note A</a>`;
@@ -168,10 +172,7 @@ This is the third section of note E
         expect(
           md.render(`This is the root node. \n\n ![[note-e#Section 2]]`)
         ).toMatch(
-          `<p>This is the root node.</p>
-<p><h1>Section 2</h1>
-<p>This is the second section of note E</p>
-</p>`
+          `<p>This is the root node.</p>\n<p><h1>Section 2</h1>\n<p>This is the second section of note E</p>\n</p>`
         );
       }
     );
@@ -239,10 +240,7 @@ This is the first section of note E`,
             
 ![[note-e]]`)
         ).toMatch(
-          `<p>This is the root node.</p>
-<p><h2>Section 1</h2>
-<p>This is the first section of note E</p>
-</p>`
+          `<p>This is the root node.</p>\n<p><h2>Section 1</h2>\n<p>This is the first section of note E</p>\n</p>`
         );
       }
     );
@@ -305,14 +303,9 @@ This is the first subsection of note E
 
         expect(
           md.render(`This is the root node. 
-              
-![[note-e#Section 1]]`)
+              \n![[note-e#Section 1]]`)
         ).toMatch(
-          `<p>This is the root node.</p>
-<p><p>This is the first section of note E</p>
-<h3>Subsection a</h3>
-<p>This is the first subsection of note E</p>
-</p>`
+          `<p>This is the root node.</p>\n<p><p>This is the first section of note E</p>\n<h3>Subsection a</h3>\n<p>This is the first subsection of note E</p>\n</p>`
         );
       }
     );
@@ -374,11 +367,9 @@ This is the third section of note E
       'full-inline',
       () => {
         expect(
-          md.render(`This is the root node. 
-
- content![[note-e#Section 2]]
- 
- full![[note-e#Section 3]]`)
+          md.render(
+            `This is the root node. \n\n content![[note-e#Section 2]]\n \n full![[note-e#Section 3]]`
+          )
         ).toBe(
           `<p>This is the root node.</p>\n<p>This is the second section of note E</p>\n<p><h1>Section 3</h1>\n<p>This is the third section of note E</p>\n</p>\n`
         );
@@ -407,9 +398,9 @@ This is the second section of note E
       CONFIG_EMBED_NOTE_TYPE,
       'full-inline',
       () => {
-        const res = md.render(`This is the root node. 
-
-content-card![[note-e#Section 2]]`);
+        const res = md.render(
+          `This is the root node. \n\ncontent-card![[note-e#Section 2]]`
+        );
 
         expect(res).toContain('This is the root node');
         expect(res).toContain('embed-container-note');
@@ -649,7 +640,10 @@ describe('Mixed Scenario Embed', () => {
       () => {
         const md = markdownItWikilinkNavigation(
           markdownItWikilinkEmbed(MarkdownIt(), ws, parser),
-          ws
+          ws,
+          {
+            root: vscode.Uri.file('.'),
+          }
         );
         const result = md.render(mixedSourceContent);
 
