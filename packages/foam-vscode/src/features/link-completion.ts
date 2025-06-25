@@ -7,6 +7,7 @@ import { FoamWorkspace } from '../core/model/workspace';
 import { getFoamVsCodeConfig } from '../services/config';
 import { fromVsCodeUri, toVsCodeUri } from '../utils/vsc-utils';
 import { getNoteTooltip, getFoamDocSelectors } from '../services/editor';
+import { MarkdownLink } from '../core/services/markdown-link';
 
 export const aliasCommitCharacters = ['#'];
 export const linkCommitCharacters = ['#', '|'];
@@ -99,70 +100,93 @@ export default async function activate(
 export class SectionCompletionProvider
   implements vscode.CompletionItemProvider<vscode.CompletionItem>
 {
-  constructor(private ws: FoamWorkspace) {}
+  constructor(private workspace: FoamWorkspace) {}
 
-  provideCompletionItems(
+  async provideCompletionItems(
     document: vscode.TextDocument,
-    position: vscode.Position
-  ): vscode.ProviderResult<vscode.CompletionList<vscode.CompletionItem>> {
-    const cursorPrefix = document
-      .lineAt(position)
-      .text.substr(0, position.character);
-
-    // Requires autocomplete only if cursorPrefix matches `[[` that NOT ended by `]]`.
-    // See https://github.com/foambubble/foam/pull/596#issuecomment-825748205 for details.
-    const match = cursorPrefix.match(SECTION_REGEX);
-
-    if (!match) {
+    position: vscode.Position,
+    token: vscode.CancellationToken,
+    context: vscode.CompletionContext
+  ): Promise<vscode.CompletionList<vscode.CompletionItem>> {
+    const link = this.findLink(document, position);
+    if (!link) {
+      return null;
+    }
+    const uri = fromVsCodeUri(document.uri);
+    const note = this.workspace.find(link.target || uri);
+    if (!note) {
       return null;
     }
 
-    // Determine the target resource. If the link is just `[[#...]]`,
-    // it refers to the current document. Otherwise, it's the text before the '#'.
-    const resourceId =
-      match[1] === '#' ? fromVsCodeUri(document.uri) : match[1].slice(0, -1);
-
-    const resource = this.ws.find(resourceId);
-    const replacementRange = new vscode.Range(
-      position.line,
-      cursorPrefix.lastIndexOf('#') + 1,
-      position.line,
-      position.character
-    );
-    if (resource) {
-      // Provide completion for all sections by iterating through their linkable IDs.
-      const items = resource.sections.flatMap(section => {
-        return section.linkableIds.map(linkId => {
-          const isBlockId = linkId.startsWith('^');
-          const insertText = isBlockId ? linkId.substring(1) : linkId;
-
-          // For block IDs, the label in the completion list is the ID itself (e.g., `^my-id`).
-          // For heading slugs, the label is the heading text.
-          const label = isBlockId ? linkId : section.label;
-          const kind = isBlockId
-            ? vscode.CompletionItemKind.Constant
-            : vscode.CompletionItemKind.Text;
-
-          const item = new ResourceCompletionItem(
-            label,
-            kind,
-            resource.uri.with({ fragment: insertText })
+    let items = note.sections.flatMap(section => {
+      const headingCompletions = section.linkableIds
+        .filter(id => !id.startsWith('^'))
+        .map(id => {
+          const item = new vscode.CompletionItem(
+            section.label,
+            vscode.CompletionItemKind.Reference
           );
-          item.insertText = insertText;
-          item.sortText = String(section.range.start.line).padStart(5, '0');
-          item.range = replacementRange;
+          item.insertText = id;
+          item.documentation = getNoteTooltip(note.title);
+          item.detail = 'Foam Heading';
           item.commitCharacters = sectionCommitCharacters;
-          item.command = COMPLETION_CURSOR_MOVE;
-          item.documentation = new vscode.MarkdownString(
-            `**Section:** ${section.label}`
-          );
-
           return item;
         });
+
+      const blockCompletions = section.linkableIds
+        .filter(id => id.startsWith('^'))
+        .map(id => {
+          const item = new vscode.CompletionItem(
+            id,
+            vscode.CompletionItemKind.Reference
+          );
+          item.insertText = id;
+          item.documentation = getNoteTooltip(note.title);
+          item.detail = 'Foam Block';
+          item.commitCharacters = sectionCommitCharacters;
+          return item;
+        });
+      return [...headingCompletions, ...blockCompletions];
+    });
+
+    if (link.fragment && link.fragment !== '^') {
+      items = items.filter(item => {
+        const label =
+          typeof item.label === 'string' ? item.label : item.label.label;
+        return label.toLowerCase().startsWith(link.fragment.toLowerCase());
       });
-      return new vscode.CompletionList(items, false);
     }
-    return null;
+
+    const uniqueItems = Array.from(
+      new Map(items.map(item => [item.label, item])).values()
+    );
+
+    return new vscode.CompletionList(uniqueItems);
+  }
+
+  private findLink(
+    document: vscode.TextDocument,
+    position: vscode.Position
+  ): { target: string; fragment: string } {
+    const range = document.getWordRangeAtPosition(position, WIKILINK_REGEX);
+    if (!range) {
+      return null;
+    }
+    const textWithBrackets = document.getText(range);
+    const text = textWithBrackets.substring(2);
+
+    const hashIndex = text.indexOf('#');
+    if (hashIndex === -1) {
+      return null;
+    }
+
+    const target = text.substring(0, hashIndex);
+    const fragment = text.substring(hashIndex + 1);
+
+    return {
+      target: target,
+      fragment: fragment,
+    };
   }
 }
 

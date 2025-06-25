@@ -23,7 +23,10 @@ describe('Link Completion', () => {
     createTestNote({
       root,
       uri: 'file-name.md',
-      sections: [{ label: 'Section One' }, { label: 'Section Two' }],
+      sections: [
+        { label: 'Section One', linkableIds: ['section-one'] },
+        { label: 'Section Two', linkableIds: ['section-two'] },
+      ],
     })
   )
     .set(
@@ -220,7 +223,12 @@ describe('Link Completion', () => {
 
       const links = await provider.provideCompletionItems(
         doc,
-        new vscode.Position(0, text.length)
+        new vscode.Position(0, text.length),
+        new vscode.CancellationTokenSource().token,
+        {
+          triggerKind: vscode.CompletionTriggerKind.TriggerCharacter,
+          triggerCharacter: '#',
+        }
       );
 
       expect(new Set(links.items.map(i => i.label))).toEqual(
@@ -248,7 +256,12 @@ Content of section 2
 
     const links = await provider.provideCompletionItems(
       doc,
-      new vscode.Position(9, 3)
+      new vscode.Position(9, 3),
+      new vscode.CancellationTokenSource().token,
+      {
+        triggerKind: vscode.CompletionTriggerKind.TriggerCharacter,
+        triggerCharacter: '#',
+      }
     );
 
     expect(new Set(links.items.map(i => i.label))).toEqual(
@@ -305,7 +318,12 @@ This is a paragraph. ^p1
 
     const links = await provider.provideCompletionItems(
       doc,
-      new vscode.Position(0, text.length)
+      new vscode.Position(0, text.length),
+      new vscode.CancellationTokenSource().token,
+      {
+        triggerKind: vscode.CompletionTriggerKind.TriggerCharacter,
+        triggerCharacter: '#',
+      }
     );
 
     expect(new Set(links.items.map(i => i.label))).toEqual(

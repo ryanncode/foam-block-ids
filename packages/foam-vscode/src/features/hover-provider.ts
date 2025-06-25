@@ -181,7 +181,7 @@ export class HoverProvider implements vscode.HoverProvider {
         mdContent,
         sources.length > 0 ? references : null,
         targetUri.isPlaceholder() ? newNoteFromTemplate : null,
-      ].filter(isSome),
+      ],
       range: toVsCodeRange(targetLink.range),
     };
     return hover;
