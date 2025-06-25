@@ -19,6 +19,7 @@ import {
   toVsCodeUri,
 } from '../utils/vsc-utils';
 import { isNone } from '../core/utils';
+import { toSlug } from '../utils/slug';
 
 /**
  * Diagnostic code for an ambiguous link identifier.
@@ -221,56 +222,55 @@ function createAmbiguousIdentifierDiagnostic(
  * Creates a VS Code Diagnostic for a wikilink pointing to a non-existent section.
  * @param link The wikilink containing the broken section reference.
  * @param target The string identifier of the target note.
- * @param section The string identifier of the (non-existent) section.
- * @param resource The target resource where the section was not found.
+ * @param sectionId The string identifier of the (non-existent) section.
+ * @param targetResource The target resource where the section was not found.
  * @returns A `vscode.Diagnostic` object.
  */
 function createUnknownSectionDiagnostic(
   link: ResourceLink,
   target: string,
-  section: string,
-  resource: Resource
+  sectionId: string,
+  targetResource: Resource
 ): vscode.Diagnostic {
-  const range = Range.create(
+  const linkRange = Range.create(
     link.range.start.line,
-    link.range.start.character + 2 + target.length + 1,
+    link.range.start.character + target.length + 3, // [[ + target + #
     link.range.end.line,
     link.range.end.character - 2
   );
-  return {
-    code: UNKNOWN_SECTION_CODE,
-    message: `Cannot find section "${section}" in document, available sections are:`,
-    range: toVsCodeRange(range),
-    severity: vscode.DiagnosticSeverity.Warning,
-    source: 'Foam',
-    relatedInformation: createSectionSuggestions(resource),
-  };
-}
-
-/**
- * Generates a list of suggested sections from a resource to be displayed
- * as related information in a diagnostic.
- * This helps the user see the available, valid sections in a note.
- * @param resource The resource to generate suggestions from.
- * @returns An array of `vscode.DiagnosticRelatedInformation` objects.
- */
-function createSectionSuggestions(
-  resource: Resource
-): vscode.DiagnosticRelatedInformation[] {
-  return resource.sections.flatMap(section => {
+  const diagnostic = new vscode.Diagnostic(
+    toVsCodeRange(linkRange),
+    `Unknown section #${sectionId}`,
+    vscode.DiagnosticSeverity.Warning
+  );
+  diagnostic.source = 'foam';
+  diagnostic.code = UNKNOWN_SECTION_CODE;
+  const related: vscode.DiagnosticRelatedInformation[] = [];
+  for (const section of targetResource.sections) {
     const location = new vscode.Location(
-      toVsCodeUri(resource.uri),
-      toVsCodePosition(section.range.start)
+      toVsCodeUri(targetResource.uri),
+      toVsCodeRange(section.range)
     );
-    // Create a suggestion for each linkable ID (slugs and block IDs).
-    return section.linkableIds.map(linkId => {
-      const isBlockId = linkId.startsWith('^');
-      // For block IDs, the message is the ID itself (e.g., `^my-id`).
-      // For heading slugs, the message is the user-friendly heading label.
-      const message = isBlockId ? linkId : section.label;
-      return new vscode.DiagnosticRelatedInformation(location, message);
-    });
-  });
+
+    // Add heading label if it's a heading
+    if (toSlug(section.label) === section.canonicalId) {
+      related.push(
+        new vscode.DiagnosticRelatedInformation(location, section.label)
+      );
+    }
+
+    // Add block IDs
+    for (const id of section.linkableIds ?? []) {
+      if (id.startsWith('^')) {
+        related.push(new vscode.DiagnosticRelatedInformation(location, id));
+      }
+    }
+  }
+  // remove duplicates
+  diagnostic.relatedInformation = related.filter(
+    (v, i, a) => a.findIndex(t => t.message === v.message) === i
+  );
+  return diagnostic;
 }
 
 /**
@@ -338,6 +338,36 @@ export class IdentifierResolver implements vscode.CodeActionProvider {
         createReplaceSectionCommand(diagnostic, info, this.workspace)
       )
       .filter((action): action is vscode.CodeAction => action !== null);
+  }
+
+  private createSectionActions(
+    diagnostic: vscode.Diagnostic
+  ): vscode.CodeAction[] {
+    return diagnostic.relatedInformation.map(info => {
+      const isBlock = info.message.startsWith('^');
+      const newSectionId = isBlock ? info.message : toSlug(info.message);
+      const title = `Change to '#${newSectionId}'`;
+      const action = new vscode.CodeAction(
+        title,
+        vscode.CodeActionKind.QuickFix
+      );
+      const linkText = vscode.window.activeTextEditor.document.getText(
+        diagnostic.range
+      );
+      const newLink = MarkdownLink.replaceSection(linkText, newSectionId);
+      action.command = {
+        command: REPLACE_TEXT_COMMAND.name,
+        title: 'Replace text',
+        arguments: [
+          {
+            range: diagnostic.range,
+            value: newLink,
+          },
+        ],
+      };
+      action.diagnostics = [diagnostic];
+      return action;
+    });
   }
 }
 

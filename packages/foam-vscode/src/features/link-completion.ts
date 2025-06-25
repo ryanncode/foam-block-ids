@@ -8,6 +8,8 @@ import { getFoamVsCodeConfig } from '../services/config';
 import { fromVsCodeUri, toVsCodeUri } from '../utils/vsc-utils';
 import { getNoteTooltip, getFoamDocSelectors } from '../services/editor';
 import { MarkdownLink } from '../core/services/markdown-link';
+import { toSlug } from '../utils/slug';
+import { isSome } from '../core/utils';
 
 export const aliasCommitCharacters = ['#'];
 export const linkCommitCharacters = ['#', '|'];
@@ -118,36 +120,40 @@ export class SectionCompletionProvider
       return null;
     }
 
-    let items = note.sections.flatMap(section => {
-      const headingCompletions = section.linkableIds
-        .filter(id => !id.startsWith('^'))
-        .map(id => {
-          const item = new vscode.CompletionItem(
-            section.label,
-            vscode.CompletionItemKind.Reference
-          );
-          item.insertText = id;
-          item.documentation = getNoteTooltip(note.title);
-          item.detail = 'Foam Heading';
-          item.commitCharacters = sectionCommitCharacters;
-          return item;
-        });
+    let items = note.sections
+      .flatMap(section => {
+        const headingCompletion =
+          toSlug(section.label) === section.canonicalId
+            ? (() => {
+                const item = new vscode.CompletionItem(
+                  section.label,
+                  vscode.CompletionItemKind.Reference
+                );
+                item.insertText = section.canonicalId;
+                item.documentation = getNoteTooltip(note.title);
+                item.detail = 'Foam Heading';
+                item.commitCharacters = sectionCommitCharacters;
+                return item;
+              })()
+            : null;
 
-      const blockCompletions = section.linkableIds
-        .filter(id => id.startsWith('^'))
-        .map(id => {
-          const item = new vscode.CompletionItem(
-            id,
-            vscode.CompletionItemKind.Reference
-          );
-          item.insertText = id;
-          item.documentation = getNoteTooltip(note.title);
-          item.detail = 'Foam Block';
-          item.commitCharacters = sectionCommitCharacters;
-          return item;
-        });
-      return [...headingCompletions, ...blockCompletions];
-    });
+        const blockCompletions = section.linkableIds
+          .filter(id => id.startsWith('^'))
+          .map(id => {
+            const item = new vscode.CompletionItem(
+              id,
+              vscode.CompletionItemKind.Reference
+            );
+            item.insertText = id.substring(1);
+            item.documentation = getNoteTooltip(note.title);
+            item.detail = 'Foam Block';
+            item.commitCharacters = sectionCommitCharacters;
+            return item;
+          });
+
+        return [headingCompletion, ...blockCompletions];
+      })
+      .filter(isSome);
 
     if (link.fragment && link.fragment !== '^') {
       items = items.filter(item => {
@@ -168,20 +174,27 @@ export class SectionCompletionProvider
     document: vscode.TextDocument,
     position: vscode.Position
   ): { target: string; fragment: string } {
-    const range = document.getWordRangeAtPosition(position, WIKILINK_REGEX);
-    if (!range) {
+    const lineText = document.lineAt(position.line).text;
+    const lineTillPosition = lineText.substring(0, position.character);
+
+    const linkStart = lineTillPosition.lastIndexOf('[[');
+    if (linkStart === -1) {
       return null;
     }
-    const textWithBrackets = document.getText(range);
-    const text = textWithBrackets.substring(2);
 
-    const hashIndex = text.indexOf('#');
+    const linkContent = lineTillPosition.substring(linkStart + 2);
+    // Do not provide completions if the link is already closed
+    if (linkContent.includes(']]')) {
+      return null;
+    }
+
+    const hashIndex = linkContent.indexOf('#');
     if (hashIndex === -1) {
       return null;
     }
 
-    const target = text.substring(0, hashIndex);
-    const fragment = text.substring(hashIndex + 1);
+    const target = linkContent.substring(0, hashIndex);
+    const fragment = linkContent.substring(hashIndex + 1);
 
     return {
       target: target,

@@ -10,6 +10,7 @@ import { getBlockFor } from '../../../core/utils/md';
 import { Connection, FoamGraph } from '../../../core/model/graph';
 import { Logger } from '../../../core/utils/log';
 import { getNoteTooltip } from '../../../services/editor';
+import { toSlug } from '../../../utils/slug';
 
 export class BaseTreeItem extends vscode.TreeItem {
   resolveTreeItem(): Promise<vscode.TreeItem> {
@@ -242,7 +243,17 @@ export function createConnectionItemsForResource(
           s.linkableIds.includes(fragment)
         );
         if (section) {
-          item.label = section.label;
+          const isHeading = toSlug(section.label) === section.canonicalId;
+          if (isHeading) {
+            item.label = section.label;
+          } else {
+            const blockIdWithCaret = section.linkableIds.find(id =>
+              id.startsWith('^')
+            );
+            if (blockIdWithCaret) {
+              item.label = `${section.label} ${blockIdWithCaret}`;
+            }
+          }
         }
       }
     }

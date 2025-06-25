@@ -76,4 +76,18 @@ export abstract class MarkdownLink {
     }
     throw new Error(`Unexpected state: link of type ${type} is not supported`);
   }
+
+  public static replaceSection(linkText: string, newSection: string): string {
+    const wikilinkRegex = /\[\[([^\]#|]*)(?:#[^|\]]*)?(?:\|([^\]]*))?\]\]/;
+    const match = linkText.match(wikilinkRegex);
+    if (match) {
+      const embed = linkText.startsWith('!') ? '!' : '';
+      const target = match[1] || '';
+      const alias = match[2] || '';
+      const sectionPart = newSection ? `#${newSection}` : '';
+      const aliasPart = alias ? `|${alias}` : '';
+      return `${embed}[[${target}${sectionPart}${aliasPart}]]`;
+    }
+    return linkText;
+  }
 }

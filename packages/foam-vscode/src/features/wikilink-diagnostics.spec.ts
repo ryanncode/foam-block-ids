@@ -182,7 +182,7 @@ Content of section 2
     );
     expect(countEntries(collection)).toEqual(1);
     const items = collection.get(toVsCodeUri(fileB.uri));
-    expect(items[0].range).toEqual(new vscode.Range(0, 15, 0, 28));
+    expect(items[0].range).toEqual(new vscode.Range(0, 16, 0, 26));
     expect(items[0].severity).toEqual(vscode.DiagnosticSeverity.Warning);
     expect(items[0].relatedInformation.map(info => info.message)).toEqual([
       'Section 1',
@@ -268,12 +268,11 @@ describe('Block Identifier diagnostics', () => {
     );
     expect(countEntries(collection)).toEqual(1);
     const items = collection.get(toVsCodeUri(linkingNote.uri));
-    expect(items[0].range).toEqual(new vscode.Range(0, 28, 0, 50));
+    expect(items[0].range).toEqual(new vscode.Range(0, 29, 0, 48));
     expect(items[0].severity).toEqual(vscode.DiagnosticSeverity.Warning);
-    expect(items[0].relatedInformation.map(info => info.message)).toEqual([
-      'Note with block id',
-      '^block-1',
-    ]);
+    expect(
+      items[0].relatedInformation.map(info => info.message).sort()
+    ).toEqual(['Note with block id', '^block-1'].sort());
   });
 });
 
@@ -322,8 +321,8 @@ describe('Mixed Scenario Diagnostics', () => {
     const items = collection.get(toVsCodeUri(mixedSource.uri));
     // The warning should be for [[mixed-target#^no-such-block]]
     // which is on line 9 (index 8) of mixed-source.md
-    expect(items[0].range).toEqual(new vscode.Range(8, 44, 8, 61));
-    expect(items[0].message).toContain('Cannot find section');
+    expect(items[0].range).toEqual(new vscode.Range(8, 45, 8, 59));
+    expect(items[0].message).toContain('Unknown section');
 
     await deleteFile(mixedTargetFile.uri);
     await deleteFile(mixedOtherFile.uri);

@@ -77,7 +77,7 @@ export const createSectionParserPlugin = (): ParserPlugin => {
       note.sections = [];
     },
 
-    visit: (node, note, markdown, index, parent, ancestors) => {
+    visit: (node, note, noteSource, index, parent, ancestors) => {
       if (node.type === 'heading') {
         const level = (node as any).depth;
         let label = getTextFromChildren(node);
@@ -104,22 +104,27 @@ export const createSectionParserPlugin = (): ParserPlugin => {
         ) {
           const poppedSection = sectionStack.pop()!;
           const slug = slugger.slug(poppedSection.label);
-          const linkableIds = [slug];
+          const linkableIds = new Set([slug, poppedSection.label]);
           if (poppedSection.blockId) {
-            linkableIds.push(poppedSection.blockId);
-            linkableIds.push(poppedSection.blockId.substring(1));
+            linkableIds.add(poppedSection.blockId);
+            linkableIds.add(poppedSection.blockId.substring(1));
           }
+
+          // The end of the section is the line before the new heading starts.
+          const endLine = start.line > 0 ? start.line - 1 : 0;
+          const lines = noteSource.split('\n');
+          const endChar = lines[endLine]?.length ?? 0;
 
           note.sections.push({
             label: poppedSection.label,
             range: Range.create(
               poppedSection.start.line,
               poppedSection.start.character,
-              start.line,
-              start.character
+              endLine,
+              endChar
             ),
             canonicalId: slug,
-            linkableIds: linkableIds,
+            linkableIds: Array.from(linkableIds),
           });
         }
 
@@ -153,13 +158,13 @@ export const createSectionParserPlugin = (): ParserPlugin => {
             const blockIdWithCaret = text;
             const blockId = blockIdWithCaret.substring(1);
             // For full-line blocks, the label is the raw text of the preceding node.
-            const label = getNodeText(precedingNode, markdown).trim();
+            const label = getNodeText(precedingNode, noteSource).trim();
 
             note.sections.push({
               label: label,
               range: astPositionToFoamRange(precedingNode.position!),
               canonicalId: blockId,
-              linkableIds: [blockId],
+              linkableIds: [blockId, blockIdWithCaret],
             });
 
             // Mark both the content block and the ID paragraph as processed.
@@ -194,18 +199,20 @@ export const createSectionParserPlugin = (): ParserPlugin => {
             label: label,
             range: astPositionToFoamRange(node.position!),
             canonicalId: blockId,
-            linkableIds: [blockId],
+            linkableIds: [blockId, blockIdWithCaret],
           });
           // Mark as processed to avoid children being processed again
           visit(node as any, (n: Node) => {
             processedNodes.add(n);
           });
         } else if (node.type === 'listItem') {
+          // Even list items without block IDs are considered sections,
+          // so they can be targeted by backlinks.
           note.sections.push({
             label: text.trim(),
             range: astPositionToFoamRange(node.position!),
-            canonicalId: undefined,
-            linkableIds: [],
+            canonicalId: undefined, // No canonical ID without a block ID
+            linkableIds: [], // Ensure linkableIds is always initialized
           });
           // Mark this node and its paragraph children as processed to avoid duplicates,
           // but allow visiting nested lists.
@@ -229,10 +236,10 @@ export const createSectionParserPlugin = (): ParserPlugin => {
       while (sectionStack.length > 0) {
         const poppedSection = sectionStack.pop()!;
         const slug = slugger.slug(poppedSection.label);
-        const linkableIds = [slug];
+        const linkableIds = new Set([slug, poppedSection.label]);
         if (poppedSection.blockId) {
-          linkableIds.push(poppedSection.blockId);
-          linkableIds.push(poppedSection.blockId.substring(1));
+          linkableIds.add(poppedSection.blockId);
+          linkableIds.add(poppedSection.blockId.substring(1));
         }
 
         note.sections.push({
@@ -244,9 +251,23 @@ export const createSectionParserPlugin = (): ParserPlugin => {
             fileEndPosition.character
           ),
           canonicalId: slug,
-          linkableIds: linkableIds,
+          linkableIds: Array.from(linkableIds),
         });
       }
+
+      // Create a "whole-document" section. This is the fallback, and allows
+      // linking to the document itself with a `#` or `[[note]]` fragment.
+      note.sections.push({
+        label: note.title,
+        range: Range.create(
+          0,
+          0,
+          fileEndPosition.line,
+          fileEndPosition.character
+        ),
+        canonicalId: '', // An empty canonicalId signifies the whole-document section
+        linkableIds: [],
+      });
 
       // Finally, sort all sections by their position in the document.
       note.sections.sort((a, b) => a.range.start.line - b.range.start.line);
