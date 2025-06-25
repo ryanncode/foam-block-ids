@@ -133,7 +133,7 @@ describe('Displaying included notes in preview', () => {
 
         const res = md.render(`This is the root node. ![[note-a]]`);
         expect(res).toContain('This is the root node');
-        expect(res).not.toContain('embed-container-note');
+        expect(res).toContain('embed-container-note');
         expect(res).toContain('This is the text of note A');
       }
     );
@@ -207,7 +207,7 @@ This is the third section of note E
           `This is the root node. ![[note-e-container#Section 3]]`
         );
         expect(res).toContain('This is the root node');
-        expect(res).not.toContain('embed-container-note');
+        expect(res).toContain('embed-container-note');
         expect(res).toContain('Section 3');
         expect(res).toContain('This is the third section of note E');
       }
@@ -264,14 +264,14 @@ This is the first section of note E
 
     await withModifiedFoamConfiguration(
       CONFIG_EMBED_NOTE_TYPE,
-      'content-inline',
+      'content-card',
       () => {
         const md = markdownItWikilinkEmbed(MarkdownIt(), ws, parser);
 
         const res = md.render(`This is the root node. ![[note-e.md]]`);
 
         expect(res).toContain('This is the root node');
-        expect(res).not.toContain('embed-container-note');
+        expect(res).toContain('embed-container-note');
         expect(res).toContain('Section 1');
         expect(res).toContain('This is the first section of note E');
         expect(res).not.toContain('Title');
