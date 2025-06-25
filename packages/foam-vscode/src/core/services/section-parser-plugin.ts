@@ -129,19 +129,20 @@ export const createSectionPlugin = (): ParserPlugin => {
 
 export const createBlockIdPlugin = (): ParserPlugin => {
   const processedNodes = new Set<Node>();
-  const slugger = new GithubSlugger();
   return {
     name: 'block-id',
     onWillVisitTree: () => {
       processedNodes.clear();
     },
     visit: (node, note, markdown, index, parent, ancestors) => {
+      // Legacy: skip headings and their descendants
       if (
         node.type === 'heading' ||
         ancestors.some(a => a.type === 'heading')
       ) {
         return;
       }
+      // Legacy: skip already processed nodes
       let isAlreadyProcessed = false;
       if (node.type === 'listItem') {
         isAlreadyProcessed = processedNodes.has(node);
@@ -153,9 +154,44 @@ export const createBlockIdPlugin = (): ParserPlugin => {
       if (isAlreadyProcessed || !parent || index === undefined) {
         return;
       }
-      let block: Node | undefined;
-      let blockId: string | undefined;
-      let idNode: Node | undefined;
+
+      // --- Legacy: handle full-line block IDs for lists and blockquotes ---
+      if (node.type === 'list' || node.type === 'blockquote') {
+        const blockText = getNodeText(node, markdown);
+        const lines = blockText.split('\n');
+        const lastLine = lines[lines.length - 1];
+        const fullLineBlockIdMatch = lastLine.match(/^\s*(\^[\w.-]+)\s*$/);
+        if (fullLineBlockIdMatch) {
+          const blockId = fullLineBlockIdMatch[1];
+          // Exclude the ID line from the label and range
+          const label = lines.slice(0, -1).join('\n');
+          const start = astPointToFoamPosition(node.position.start);
+          const endLine = start.line + lines.length - 2; // -1 for 0-indexed, -1 to exclude ID line
+          const endChar = lines.length > 1 ? lines[lines.length - 2].length : 0;
+          const range = Range.create(
+            start.line,
+            start.character,
+            endLine,
+            endChar
+          );
+          const blockIdNoCaret = blockId.startsWith('^')
+            ? blockId.substring(1)
+            : blockId;
+          note.sections.push({
+            label,
+            range,
+            canonicalId: blockIdNoCaret,
+            linkableIds: [blockIdNoCaret, blockId],
+          });
+          processedNodes.add(node);
+          return;
+        }
+      }
+
+      // --- Legacy: handle full-line block IDs for paragraphs ---
+      let block;
+      let blockId;
+      let idNode;
       const nodeText = getNodeText(node, markdown);
       if (node.type === 'paragraph' && index > 0) {
         const pText = nodeText.trim();
@@ -169,6 +205,8 @@ export const createBlockIdPlugin = (): ParserPlugin => {
           }
         }
       }
+
+      // --- Legacy: handle inline block IDs ---
       if (!block) {
         let textForInlineId = nodeText;
         if (node.type === 'listItem') {
@@ -182,6 +220,8 @@ export const createBlockIdPlugin = (): ParserPlugin => {
           blockId = inlineBlockIdMatch[1];
         }
       }
+
+      // --- Legacy: create section for block ID ---
       if (block && blockId) {
         if (!processedNodes.has(block)) {
           const blockIdNoCaret = blockId.startsWith('^')
@@ -193,7 +233,7 @@ export const createBlockIdPlugin = (): ParserPlugin => {
           }
           note.sections.push({
             label,
-            range: astPositionToFoamRange(block.position!),
+            range: astPositionToFoamRange(block.position),
             canonicalId: blockIdNoCaret,
             linkableIds: [blockIdNoCaret, blockId],
           });

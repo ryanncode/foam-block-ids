@@ -130,34 +130,47 @@ export class HoverProvider implements vscode.HoverProvider {
     if (!targetUri.isPlaceholder()) {
       const targetFileUri = targetUri.with({ fragment: '' });
       const targetResource = this.workspace.get(targetFileUri);
-      let content: string;
+      let content: string = null;
 
       if (linkFragment) {
         const section = targetResource?.sections.find(s =>
           s.linkableIds.includes(linkFragment)
         );
         if (isSome(section)) {
-          const fileContent = await this.workspace.readAsMarkdown(
-            targetFileUri
-          );
-          if (isSome(fileContent)) {
-            content = sliceContent(fileContent, section.range);
+          // Legacy: For headings, slice file content by range. For block IDs, use label directly.
+          // Treat as heading if no linkableId starts with ^, otherwise block ID section.
+          let isHeading = !section.linkableIds.some(id => id.startsWith('^'));
+          if (isHeading) {
+            const fileContent = await this.workspace.readAsMarkdown(
+              targetFileUri
+            );
+            if (isSome(fileContent)) {
+              let content = sliceContent(fileContent, section.range);
+              content = content.replace(/---[\s\S]*?---/, '').trim();
+              mdContent = getNoteTooltip(content);
+            }
+          } else {
+            let content = section.label;
+            content = content.replace(/---[\s\S]*?---/, '').trim();
+            mdContent = getNoteTooltip(content);
           }
         } else {
-          content = await this.workspace.readAsMarkdown(targetFileUri);
+          let content = await this.workspace.readAsMarkdown(targetFileUri);
+          if (isSome(content)) {
+            content = content.replace(/---[\s\S]*?---/, '').trim();
+            mdContent = getNoteTooltip(content);
+          } else if (targetResource) {
+            mdContent = getNoteTooltip(targetResource.title);
+          }
         }
       } else {
-        content = await this.workspace.readAsMarkdown(targetFileUri);
-      }
-
-      if (isSome(content)) {
-        content = content.replace(/---[\s\S]*?---/, '').trim();
-      }
-
-      if (isSome(content)) {
-        mdContent = getNoteTooltip(content);
-      } else if (targetResource) {
-        mdContent = targetResource.title;
+        let content = await this.workspace.readAsMarkdown(targetFileUri);
+        if (isSome(content)) {
+          content = content.replace(/---[\s\S]*?---/, '').trim();
+          mdContent = getNoteTooltip(content);
+        } else if (targetResource) {
+          mdContent = getNoteTooltip(targetResource.title);
+        }
       }
     }
 
