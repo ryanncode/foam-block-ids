@@ -110,6 +110,7 @@ export class SectionCompletionProvider
     token: vscode.CancellationToken,
     context: vscode.CompletionContext
   ): Promise<vscode.CompletionList<vscode.CompletionItem>> {
+    // ...existing code...
     const link = this.findLink(document, position);
     if (!link) {
       return null;
@@ -120,41 +121,38 @@ export class SectionCompletionProvider
       return null;
     }
 
-    let items = note.sections
-      .flatMap(section => {
-        const headingCompletion =
-          toSlug(section.label) === section.canonicalId
-            ? (() => {
-                const item = new vscode.CompletionItem(
-                  section.label,
-                  vscode.CompletionItemKind.Reference
-                );
-                item.insertText = section.canonicalId;
-                item.documentation = getNoteTooltip(note.title);
-                item.detail = 'Foam Heading';
-                item.commitCharacters = sectionCommitCharacters;
-                return item;
-              })()
-            : null;
+    // For each section, create a heading completion (if canonicalId is a heading) and block completions for each block id
+    let items: vscode.CompletionItem[] = [];
+    for (const section of note.sections) {
+      // Heading completion: only if canonicalId is not a block id (doesn't start with ^)
+      if (section.canonicalId && !section.canonicalId.startsWith('^')) {
+        const item = new vscode.CompletionItem(
+          section.label,
+          vscode.CompletionItemKind.Reference
+        );
+        item.insertText = section.canonicalId;
+        item.documentation = getNoteTooltip(note.title);
+        item.detail = 'Foam Heading';
+        item.commitCharacters = sectionCommitCharacters;
+        items.push(item);
+      }
+      // Block completions: for each linkableId that starts with ^
+      for (const id of section.linkableIds) {
+        if (id.startsWith('^')) {
+          const item = new vscode.CompletionItem(
+            id,
+            vscode.CompletionItemKind.Reference
+          );
+          item.insertText = id.substring(1);
+          item.documentation = getNoteTooltip(note.title);
+          item.detail = 'Foam Block';
+          item.commitCharacters = sectionCommitCharacters;
+          items.push(item);
+        }
+      }
+    }
 
-        const blockCompletions = section.linkableIds
-          .filter(id => id.startsWith('^'))
-          .map(id => {
-            const item = new vscode.CompletionItem(
-              id,
-              vscode.CompletionItemKind.Reference
-            );
-            item.insertText = id.substring(1);
-            item.documentation = getNoteTooltip(note.title);
-            item.detail = 'Foam Block';
-            item.commitCharacters = sectionCommitCharacters;
-            return item;
-          });
-
-        return [headingCompletion, ...blockCompletions];
-      })
-      .filter(isSome);
-
+    // Filter by fragment if present and not just ^
     if (link.fragment && link.fragment !== '^') {
       items = items.filter(item => {
         const label =
@@ -163,6 +161,7 @@ export class SectionCompletionProvider
       });
     }
 
+    // Deduplicate by label
     const uniqueItems = Array.from(
       new Map(items.map(item => [item.label, item])).values()
     );

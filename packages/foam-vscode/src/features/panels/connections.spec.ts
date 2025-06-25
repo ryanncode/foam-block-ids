@@ -242,7 +242,7 @@ describe('Backlinks panel with block identifiers', () => {
       notes[0]
     )) as ResourceRangeTreeItem[];
     expect(links[0].label).toEqual(
-      'This is a paragraph with a block identifier. ^block-1'
+      'This is a paragraph with a block identifier.'
     );
   });
 });

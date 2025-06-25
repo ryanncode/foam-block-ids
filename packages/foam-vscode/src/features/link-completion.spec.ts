@@ -327,7 +327,15 @@ This is a paragraph. ^p1
     );
 
     expect(new Set(links.items.map(i => i.label))).toEqual(
-      new Set(['Note with blocks', 'A heading', '^p1', '^li1', '^h1'])
+      new Set([
+        'Note with blocks',
+        'A heading',
+        'This is a paragraph.',
+        '^p1',
+        '^li1',
+        '^h1',
+        'list item 1',
+      ])
     );
   });
 });

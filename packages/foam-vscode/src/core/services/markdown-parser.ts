@@ -19,7 +19,8 @@ import { extractHashtags, extractTagsFromProp, hash, isSome } from '../utils';
 import { Logger } from '../utils/log';
 import { URI } from '../model/uri';
 import { ICache } from '../utils/cache';
-import { visitWithAncestors } from '../utils/visit-with-ancestors'; // Import the new shim
+import { visitWithAncestors } from '../utils/visit-with-ancestors';
+import GithubSlugger from 'github-slugger';
 import { createSectionParserPlugin } from './section-parser-plugin';
 
 // #region Helper Functions
@@ -312,6 +313,19 @@ const definitionsPlugin: ParserPlugin = {
   },
 };
 
+const slugger = new GithubSlugger();
+
+// Note: `sectionStack` is a module-level variable that is reset on each parse.
+// This is a stateful approach required by the accumulator pattern of the sections plugin.
+type SectionStackItem = {
+  label: string;
+  level: number;
+  start: Position;
+  blockId?: string;
+  end?: Position;
+};
+let sectionStack: SectionStackItem[] = [];
+
 // #endregion
 
 // #region Core Parser Logic
@@ -325,6 +339,7 @@ export function createMarkdownParser(
     .use(frontmatterPlugin, ['yaml'])
     .use(wikiLinkPlugin, { aliasDivider: '|' });
 
+  // Use only the new unified section parser plugin, as per BLOCK-PLAN.md
   const plugins = [
     titlePlugin,
     wikilinkPlugin,
@@ -375,7 +390,6 @@ export function createMarkdownParser(
         }
       }
       visitWithAncestors(tree, (node, ancestors) => {
-        // Use visitWithAncestors to get the parent of the current node.
         const parent = ancestors[ancestors.length - 1] as Parent | undefined;
         const index = parent ? parent.children.indexOf(node) : undefined;
 
@@ -421,19 +435,21 @@ export function createMarkdownParser(
   const cachedParser: ResourceParser = {
     parse: (uri: URI, markdown: string): Resource => {
       const actualChecksum = hash(markdown);
-      if (cache.has(uri)) {
+      if (cache && cache.has(uri)) {
         const { checksum, resource } = cache.get(uri);
         if (actualChecksum === checksum) {
           return resource;
         }
       }
       const resource = actualParser.parse(uri, markdown);
-      cache.set(uri, { checksum: actualChecksum, resource });
+      if (cache) {
+        cache.set(uri, { checksum: actualChecksum, resource });
+      }
       return resource;
     },
   };
 
-  return isSome(cache) ? cachedParser : actualParser;
+  return cache ? cachedParser : actualParser;
 }
 
 /**

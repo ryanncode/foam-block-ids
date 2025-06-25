@@ -12,7 +12,7 @@ import { fromVsCodeUri, toVsCodeUri } from '../../utils/vsc-utils';
 import { MarkdownLink } from '../../core/services/markdown-link';
 import { URI } from '../../core/model/uri';
 import { Position } from '../../core/model/position';
-import { Range } from '../../core/model/range'; // Add this import
+import { Range } from '../../core/model/range';
 import { TextEdit } from '../../core/services/text-edit';
 import { isNone, isSome } from '../../core/utils';
 import { stripFrontMatter } from '../../core/utils/md';
@@ -24,13 +24,9 @@ import {
 
 export const WIKILINK_EMBED_REGEX =
   /((?:(?:full|content)-(?:inline|card)|full|content|inline|card)?!\[\[[^[\]]+?\]\])/;
-// we need another regex because md.use(regex, replace) only permits capturing one group
-// so we capture the entire possible wikilink item (ex. content-card![[note]]) using WIKILINK_EMBED_REGEX and then
-// use WIKILINK_EMBED_REGEX_GROUPS to parse it into the modifier(content-card) and the wikilink(note)
 export const WIKILINK_EMBED_REGEX_GROUPS =
   /((?:\w+)|(?:(?:\w+)-(?:\w+)))?!\[\[([^[\]]+?)\]\]/;
 export const CONFIG_EMBED_NOTE_TYPE = 'preview.embedNoteType';
-// refsStack is used to detect and prevent cyclic embeds.
 let refsStack: string[] = [];
 
 /**
@@ -106,45 +102,25 @@ export const markdownItWikilinkEmbed = (
   });
 };
 
-const getNoteContent = (
-  note: Resource,
-  fragment: string | undefined,
-  noteEmbedModifier: string,
+function getNoteContent(
+  includedNote: Resource,
+  linkFragment: string | undefined,
+  noteEmbedModifier: string | undefined,
   parser: ResourceParser,
   workspace: FoamWorkspace,
   md: markdownit
-) => {
-  const fullNoteContent = readFileSync(note.uri.toFsPath()).toString();
-  return renderContent(
-    fullNoteContent,
-    fragment,
-    noteEmbedModifier,
-    note,
-    parser,
-    workspace,
-    md
-  );
-};
-
-const renderContent = (
-  noteText: string,
-  fragment: string | undefined,
-  noteEmbedModifier: string,
-  note: Resource,
-  parser: ResourceParser,
-  workspace: FoamWorkspace,
-  md: markdownit
-) => {
+): string {
+  let content = `Embed for [[${includedNote.uri.path}]]`;
   let toRender: string;
 
-  switch (note.type) {
+  switch (includedNote.type) {
     case 'note': {
       const { noteScope, noteStyle } = retrieveNoteConfig(noteEmbedModifier);
 
       const extractor: EmbedNoteExtractor =
         noteScope === 'content' ? contentExtractor : fullExtractor;
 
-      const content = extractor(note, noteText, fragment, parser, workspace);
+      content = extractor(includedNote, linkFragment, parser, workspace);
 
       const formatter: EmbedNoteFormatter =
         noteStyle === 'card' ? cardFormatter : inlineFormatter;
@@ -152,21 +128,19 @@ const renderContent = (
       break;
     }
     case 'attachment':
-      noteText = `> [[${note.uri.path}]]
->
-> Embed for attachments is not supported`;
-      toRender = md.render(noteText);
+      content = `> [[${includedNote.uri.path}]]\n>\n> Embed for attachments is not supported`;
+      toRender = md.render(content);
       break;
     case 'image':
-      noteText = `![](${md.normalizeLink(note.uri.path)})`;
-      toRender = md.render(noteText);
+      content = `![](${md.normalizeLink(includedNote.uri.path)})`;
+      toRender = md.render(content);
       break;
     default:
-      toRender = noteText;
+      toRender = content;
   }
 
   return toRender;
-};
+}
 
 function withLinksRelativeToWorkspaceRoot(
   noteUri: URI,
@@ -230,7 +204,6 @@ export function retrieveNoteConfig(explicitModifier: string | undefined): {
  */
 export type EmbedNoteExtractor = (
   note: Resource,
-  noteText: string,
   linkFragment: string | undefined,
   parser: ResourceParser,
   workspace: FoamWorkspace
@@ -240,36 +213,58 @@ export type EmbedNoteExtractor = (
  * Extracts the full content of a note or a specific section/block.
  * For sections, it includes the heading itself.
  */
+
+// Helper: treat as heading if canonicalId is a slug of label and label is present
+function newSectionIsHeading(section: any): boolean {
+  return section.label && section.canonicalId === toSlug(section.label);
+}
+
+/**
+ * Extracts the full content of a note or a specific section/block.
+ * For sections, it includes the heading itself.
+ */
 function fullExtractor(
   note: Resource,
-  noteText: string,
   linkFragment: string | undefined,
   parser: ResourceParser,
   workspace: FoamWorkspace
 ): string {
-  let extractedText = noteText;
+  let noteText = readFileSync(note.uri.toFsPath()).toString();
   // Find the specific section or block being linked to, if a fragment is provided.
   const section = linkFragment
     ? Resource.findSection(note, linkFragment)
     : null;
   if (isSome(section)) {
-    // For both headings and block-level embeds,
-    // extract the content precisely using the range from the parser.
-    const rows = noteText.split('\n');
-    extractedText = rows
-      .slice(section.range.start.line, section.range.end.line + 1)
-      .join('\n');
+    if (newSectionIsHeading(section)) {
+      let rows = noteText.split('\n');
+      let nextHeadingLine = rows.length;
+      for (let i = section.range.start.line + 1; i < rows.length; i++) {
+        if (/^\s*#+\s/.test(rows[i])) {
+          nextHeadingLine = i;
+          break;
+        }
+      }
+      let slicedRows = rows.slice(section.range.start.line, nextHeadingLine);
+      noteText = slicedRows.join('\n');
+    } else {
+      // For block-level embeds (paragraphs, list items with a ^block-id),
+      // extract the content precisely using the range from the parser.
+      const rows = noteText.split('\n');
+      noteText = rows
+        .slice(section.range.start.line, section.range.end.line + 1)
+        .join('\n');
+    }
   } else {
     // No fragment: transclude the whole note (excluding frontmatter if present)
-    extractedText = stripFrontMatter(noteText);
+    noteText = stripFrontMatter(noteText);
   }
-  extractedText = withLinksRelativeToWorkspaceRoot(
+  noteText = withLinksRelativeToWorkspaceRoot(
     note.uri,
-    extractedText,
+    noteText,
     parser,
     workspace
   );
-  return extractedText;
+  return noteText;
 }
 
 /**
@@ -278,44 +273,48 @@ function fullExtractor(
  */
 function contentExtractor(
   note: Resource,
-  noteText: string,
   linkFragment: string | undefined,
   parser: ResourceParser,
   workspace: FoamWorkspace
 ): string {
-  let extractedText = noteText;
-  // Find the specific section or block being linked to.
+  let noteText = readFileSync(note.uri.toFsPath()).toString();
   let section = Resource.findSection(note, linkFragment);
   if (!linkFragment) {
     // If no fragment is provided, default to the first section (usually the main title)
-    // to extract the content of the note, excluding the title.
     section = note.sections.length ? note.sections[0] : null;
   }
   if (isSome(section)) {
-    const isHeading = toSlug(section.label) === section.canonicalId;
-    const rows = noteText.split('\n');
-    const sectionRows = rows.slice(
-      section.range.start.line,
-      section.range.end.line + 1
-    );
-    if (isHeading) {
-      sectionRows.shift(); // Remove the heading itself
+    if (newSectionIsHeading(section)) {
+      let rows = noteText.split('\n');
+      const isLastLineHeading = rows[section.range.end.line]?.match(/^\s*#+\s/);
+      rows = rows.slice(
+        section.range.start.line,
+        section.range.end.line + (isLastLineHeading ? 0 : 1)
+      );
+      rows.shift(); // Remove the heading itself
+      noteText = rows.join('\n');
+    } else {
+      // For block-level embeds (e.g., a list item with a ^block-id),
+      // extract the content of just that block using its range.
+      const rows = noteText.split('\n');
+      noteText = rows
+        .slice(section.range.start.line, section.range.end.line + 1)
+        .join('\n');
     }
-    extractedText = sectionRows.join('\n');
   } else {
     // If no fragment, or fragment not found as a section,
     // treat as content of the entire note (excluding title)
     let rows = noteText.split('\n');
     rows.shift(); // Remove the title
-    extractedText = rows.join('\n');
+    noteText = rows.join('\n');
   }
-  extractedText = withLinksRelativeToWorkspaceRoot(
+  noteText = withLinksRelativeToWorkspaceRoot(
     note.uri,
-    extractedText,
+    noteText,
     parser,
     workspace
   );
-  return extractedText;
+  return noteText;
 }
 
 /**

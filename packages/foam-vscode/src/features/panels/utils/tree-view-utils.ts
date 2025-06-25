@@ -243,17 +243,7 @@ export function createConnectionItemsForResource(
           s.linkableIds.includes(fragment)
         );
         if (section) {
-          const isHeading = toSlug(section.label) === section.canonicalId;
-          if (isHeading) {
-            item.label = section.label;
-          } else {
-            const blockIdWithCaret = section.linkableIds.find(id =>
-              id.startsWith('^')
-            );
-            if (blockIdWithCaret) {
-              item.label = `${section.label} ${blockIdWithCaret}`;
-            }
-          }
+          item.label = section.label;
         }
       }
     }

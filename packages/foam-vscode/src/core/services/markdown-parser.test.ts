@@ -401,13 +401,13 @@ This is the content of section 1.1.
 
 This is the content of section 2.
       `);
-      expect(note.sections).toHaveLength(4);
-      expect(note.sections[1].label).toEqual('Section 1');
-      expect(note.sections[1].range).toEqual(Range.create(1, 0, 4, 0));
-      expect(note.sections[2].label).toEqual('Section 1.1');
-      expect(note.sections[2].range).toEqual(Range.create(5, 0, 8, 0));
-      expect(note.sections[3].label).toEqual('Section 2');
-      expect(note.sections[3].range).toEqual(Range.create(9, 0, 12, 6));
+      expect(note.sections).toHaveLength(3);
+      expect(note.sections[0].label).toEqual('Section 1');
+      expect(note.sections[0].range).toEqual(Range.create(1, 0, 7, 0));
+      expect(note.sections[1].label).toEqual('Section 1.1');
+      expect(note.sections[1].range).toEqual(Range.create(5, 0, 7, 0));
+      expect(note.sections[2].label).toEqual('Section 2');
+      expect(note.sections[2].range).toEqual(Range.create(9, 0, 11, 0));
     });
 
     it('should support wikilinks and links in the section label', () => {
@@ -419,16 +419,16 @@ This is the content of section with wikilink
 # Section with [url](http://getfoam.io)
 
 This is the content of section with url`);
-      expect(note.sections).toHaveLength(3);
-      expect(note.sections[1].label).toEqual('Section with wikilink');
-      expect(note.sections[1].canonicalId).toEqual('section-with-wikilink');
-      expect(note.sections[1].linkableIds).toEqual([
+      expect(note.sections).toHaveLength(2);
+      expect(note.sections[0].label).toEqual('Section with wikilink');
+      expect(note.sections[0].canonicalId).toEqual('section-with-wikilink');
+      expect(note.sections[0].linkableIds).toEqual([
         'section-with-wikilink',
         'Section with wikilink',
       ]);
-      expect(note.sections[2].label).toEqual('Section with url');
-      expect(note.sections[2].canonicalId).toEqual('section-with-url');
-      expect(note.sections[2].linkableIds).toEqual([
+      expect(note.sections[1].label).toEqual('Section with url');
+      expect(note.sections[1].canonicalId).toEqual('section-with-url');
+      expect(note.sections[1].linkableIds).toEqual([
         'section-with-url',
         'Section with url',
       ]);
@@ -440,12 +440,12 @@ This is the content of section with url`);
       const note = createNoteFromMarkdown(`
 This is a paragraph with a block ID. ^my-block-id
 `);
-      expect(note.sections).toHaveLength(2);
-      expect(note.sections[1].label).toEqual(
+      expect(note.sections).toHaveLength(1);
+      expect(note.sections[0].label).toEqual(
         'This is a paragraph with a block ID.'
       );
-      expect(note.sections[1].canonicalId).toEqual('my-block-id');
-      expect(note.sections[1].linkableIds).toEqual([
+      expect(note.sections[0].canonicalId).toEqual('my-block-id');
+      expect(note.sections[0].linkableIds).toEqual([
         'my-block-id',
         '^my-block-id',
       ]);
@@ -455,10 +455,10 @@ This is a paragraph with a block ID. ^my-block-id
       const note = createNoteFromMarkdown(`
 Another paragraph ^another-id
 `);
-      expect(note.sections).toHaveLength(2);
-      expect(note.sections[1].label).toEqual('Another paragraph');
-      expect(note.sections[1].canonicalId).toEqual('another-id');
-      expect(note.sections[1].linkableIds).toEqual([
+      expect(note.sections).toHaveLength(1);
+      expect(note.sections[0].label).toEqual('Another paragraph');
+      expect(note.sections[0].canonicalId).toEqual('another-id');
+      expect(note.sections[0].linkableIds).toEqual([
         'another-id',
         '^another-id',
       ]);
@@ -469,13 +469,13 @@ Another paragraph ^another-id
 - list item 1 ^li-1
 - list item 2 ^li-2
 `);
-      expect(note.sections).toHaveLength(3);
-      expect(note.sections[1].label).toEqual('list item 1');
-      expect(note.sections[1].canonicalId).toEqual('li-1');
-      expect(note.sections[1].linkableIds).toEqual(['li-1', '^li-1']);
-      expect(note.sections[2].label).toEqual('list item 2');
-      expect(note.sections[2].canonicalId).toEqual('li-2');
-      expect(note.sections[2].linkableIds).toEqual(['li-2', '^li-2']);
+      expect(note.sections).toHaveLength(2);
+      expect(note.sections[0].label).toEqual('list item 1');
+      expect(note.sections[0].canonicalId).toEqual('li-1');
+      expect(note.sections[0].linkableIds).toEqual(['li-1', '^li-1']);
+      expect(note.sections[1].label).toEqual('list item 2');
+      expect(note.sections[1].canonicalId).toEqual('li-2');
+      expect(note.sections[1].linkableIds).toEqual(['li-2', '^li-2']);
     });
 
     it('should find block IDs in nested list items', () => {
@@ -483,13 +483,10 @@ Another paragraph ^another-id
 - list item 1
   - nested item ^nested-1
 `);
-      expect(note.sections).toHaveLength(3);
-      expect(note.sections[1].label).toEqual('list item 1');
-      expect(note.sections[1].canonicalId).toBeUndefined();
-      expect(note.sections[1].linkableIds).toEqual([]);
-      expect(note.sections[2].label).toEqual('nested item');
-      expect(note.sections[2].canonicalId).toEqual('nested-1');
-      expect(note.sections[2].linkableIds).toEqual(['nested-1', '^nested-1']);
+      expect(note.sections).toHaveLength(1);
+      expect(note.sections[0].label).toEqual('nested item');
+      expect(note.sections[0].canonicalId).toEqual('nested-1');
+      expect(note.sections[0].linkableIds).toEqual(['nested-1', '^nested-1']);
     });
 
     it('should handle headings and block IDs together', () => {
@@ -500,16 +497,16 @@ Some content.
 
 This is a paragraph with an ID. ^p-id
 `);
-      expect(note.sections).toHaveLength(3);
-      expect(note.sections[1].label).toEqual('My Heading');
-      expect(note.sections[1].canonicalId).toEqual('my-heading');
-      expect(note.sections[1].linkableIds).toEqual([
+      expect(note.sections).toHaveLength(2);
+      expect(note.sections[0].label).toEqual('My Heading');
+      expect(note.sections[0].canonicalId).toEqual('my-heading');
+      expect(note.sections[0].linkableIds).toEqual([
         'my-heading',
         'My Heading',
       ]);
-      expect(note.sections[2].label).toEqual('This is a paragraph with an ID.');
-      expect(note.sections[2].canonicalId).toEqual('p-id');
-      expect(note.sections[2].linkableIds).toEqual(['p-id', '^p-id']);
+      expect(note.sections[1].label).toEqual('This is a paragraph with an ID.');
+      expect(note.sections[1].canonicalId).toEqual('p-id');
+      expect(note.sections[1].linkableIds).toEqual(['p-id', '^p-id']);
     });
   });
 

@@ -168,6 +168,9 @@ export function updateDiagnostics(
     if (link.type !== 'wikilink') {
       return [];
     }
+    // Legacy-compatible: only suggest heading labels and block IDs (not paragraph text)
+    // for unknown section diagnostics
+    const diagnostics: vscode.Diagnostic[] = [];
     const { target, section } = MarkdownLink.analyzeLink(link);
     const targets = workspace.listByIdentifier(target);
 
@@ -245,30 +248,34 @@ function createUnknownSectionDiagnostic(
   );
   diagnostic.source = 'foam';
   diagnostic.code = UNKNOWN_SECTION_CODE;
-  const related: vscode.DiagnosticRelatedInformation[] = [];
+  // Legacy-compatible: only suggest heading labels and block IDs (with caret), not paragraph text
+  const suggestions: string[] = [];
   for (const section of targetResource.sections) {
-    const location = new vscode.Location(
-      toVsCodeUri(targetResource.uri),
-      toVsCodeRange(section.range)
-    );
-
-    // Add heading label if it's a heading
-    if (toSlug(section.label) === section.canonicalId) {
-      related.push(
-        new vscode.DiagnosticRelatedInformation(location, section.label)
-      );
+    // Only suggest heading labels (not paragraph text)
+    if (
+      section.label &&
+      section.label.trim() !== '' &&
+      toSlug(section.label) === section.canonicalId
+    ) {
+      suggestions.push(section.label);
     }
-
-    // Add block IDs
-    for (const id of section.linkableIds ?? []) {
-      if (id.startsWith('^')) {
-        related.push(new vscode.DiagnosticRelatedInformation(location, id));
-      }
+    // Only suggest block IDs (with caret)
+    const blockId = section.linkableIds.find(id => id.startsWith('^'));
+    if (blockId) {
+      suggestions.push(blockId);
     }
   }
-  // remove duplicates
-  diagnostic.relatedInformation = related.filter(
-    (v, i, a) => a.findIndex(t => t.message === v.message) === i
+  // Remove duplicates and keep order
+  const uniqueSuggestions = Array.from(new Set(suggestions));
+  diagnostic.relatedInformation = uniqueSuggestions.map(
+    s =>
+      new vscode.DiagnosticRelatedInformation(
+        new vscode.Location(
+          toVsCodeUri(targetResource.uri),
+          new vscode.Position(0, 0)
+        ),
+        s
+      )
   );
   return diagnostic;
 }

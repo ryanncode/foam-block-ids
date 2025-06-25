@@ -28,9 +28,15 @@ export default async function activate(
           );
           continue;
         }
+        // Ensure the workspace and graph are updated with the new note before computing identifiers
+        // The file has already been renamed by VS Code at this point
+        await foam.workspace.fetchAndSet(fromVsCodeUri(newUri));
+        foam.graph.update();
         const connections = foam.graph.getBacklinks(fromVsCodeUri(oldUri));
-        connections.forEach(async connection => {
-          const { target } = MarkdownLink.analyzeLink(connection.link);
+        for (const connection of connections) {
+          const { target, section, alias } = MarkdownLink.analyzeLink(
+            connection.link
+          );
           switch (connection.link.type) {
             case 'wikilink': {
               const identifier = foam.workspace.getIdentifier(
@@ -39,6 +45,8 @@ export default async function activate(
               );
               const edit = MarkdownLink.createUpdateLinkEdit(connection.link, {
                 target: identifier,
+                alias,
+                section,
               });
               renameEdits.replace(
                 toVsCodeUri(connection.source),
@@ -55,6 +63,8 @@ export default async function activate(
                   ).path;
               const edit = MarkdownLink.createUpdateLinkEdit(connection.link, {
                 target: path,
+                alias,
+                section,
               });
               renameEdits.replace(
                 toVsCodeUri(connection.source),
@@ -64,7 +74,7 @@ export default async function activate(
               break;
             }
           }
-        });
+        }
       }
 
       try {

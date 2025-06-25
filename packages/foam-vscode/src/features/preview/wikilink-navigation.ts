@@ -75,31 +75,23 @@ export const markdownItWikilinkNavigation = (
         let linkTitle = resource.title;
         let finalHref = href;
 
-        // If the link includes a section or block ID part (e.g., [[note#section]] or [[note#^block-id]])
         if (section) {
           linkTitle += `#${section}`;
-          // Find the corresponding section or block in the target resource.
-          const lookupId = section.startsWith('^')
-            ? section.substring(1)
-            : toSlug(section);
-          const foundSection = resource.sections.find(s =>
-            s.linkableIds.includes(lookupId)
+          // Use new Section model: match by canonicalId or linkableIds
+          const foundSection = resource.sections.find(
+            s => s.canonicalId === section || s.linkableIds.includes(section)
           );
-
+          let fragment;
           if (foundSection) {
-            // The fragment is always the canonicalId of the found section.
-            const fragment = foundSection.canonicalId;
-            finalHref += `#${fragment}`;
+            fragment = foundSection.canonicalId;
           } else {
-            // If the section doesn't exist, we still add it to the href
-            // to allow for navigation to a placeholder section.
-            finalHref += `#${toSlug(section)}`;
+            fragment = toSlug(section);
           }
+          finalHref += `#${fragment}`;
         }
 
         const linkText =
           alias || (section ? `${resource.title}#${section}` : resource.title);
-
         return getResourceLink(linkTitle, finalHref, linkText);
       } catch (e) {
         Logger.error('Error while parsing wikilink', e);
