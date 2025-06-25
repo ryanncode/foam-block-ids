@@ -93,6 +93,17 @@ export function isOnYAMLKeywordLine(content: string, keyword: string): boolean {
   return lastMatch[1] === keyword;
 }
 
+/**
+ * Extracts a contiguous block of non-empty lines from a Markdown string.
+ *
+ * @param markdown The full Markdown string to extract from.
+ * @param position The starting position (line number) for the extraction.
+ * @returns An object containing:
+ *          - `block`: The extracted string content of the block.
+ *          - `nLines`: The total number of lines in the extracted block. This
+ *            is calculated as `blockEnd - blockStart + 1`, which is crucial
+ *            for consumers to know the exact range of the block.
+ */
 export function getBlockFor(
   markdown: string,
   position: Position
