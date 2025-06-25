@@ -109,8 +109,11 @@ export const createSectionParserPlugin = (): ParserPlugin => {
           const linkableIds = [slug, popped.label];
           if (popped.blockId) {
             // Always include both ^block-id and block-id (no duplicates)
-            if (!linkableIds.includes(popped.blockId)) linkableIds.push(popped.blockId);
-            const noCaret = popped.blockId.startsWith('^') ? popped.blockId.substring(1) : popped.blockId;
+            if (!linkableIds.includes(popped.blockId))
+              linkableIds.push(popped.blockId);
+            const noCaret = popped.blockId.startsWith('^')
+              ? popped.blockId.substring(1)
+              : popped.blockId;
             if (!linkableIds.includes(noCaret)) linkableIds.push(noCaret);
           }
           // Section range: from heading to line before next heading
@@ -250,8 +253,11 @@ export const createSectionParserPlugin = (): ParserPlugin => {
         const slug = slugger.slug(popped.label);
         const linkableIds = [slug, popped.label];
         if (popped.blockId) {
-          if (!linkableIds.includes(popped.blockId)) linkableIds.push(popped.blockId);
-          const noCaret = popped.blockId.startsWith('^') ? popped.blockId.substring(1) : popped.blockId;
+          if (!linkableIds.includes(popped.blockId))
+            linkableIds.push(popped.blockId);
+          const noCaret = popped.blockId.startsWith('^')
+            ? popped.blockId.substring(1)
+            : popped.blockId;
           if (!linkableIds.includes(noCaret)) linkableIds.push(noCaret);
         }
         let endLine = fileEndPosition.line;
