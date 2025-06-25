@@ -274,36 +274,39 @@ function contentExtractor(
   workspace: FoamWorkspace
 ): string {
   let noteText = readFileSync(note.uri.toFsPath()).toString();
-  // Find the specific section or block being linked to.
+  // Always use the first section if no fragment, else find by fragment
   let section = Resource.findSection(note, linkFragment);
   if (!linkFragment) {
-    // If no fragment is provided, default to the first section (usually the main title)
-    // to extract the content of the note, excluding the title.
     section = note.sections.length ? note.sections[0] : null;
-    if (isSome(section)) {
-      if (newSectionIsHeading(section)) {
-        // For headings, extract the content *including* the heading line (card mode legacy behavior).
-        let rows = noteText.split('\n');
-        const isLastLineHeading =
-          rows[section.range.end.line]?.match(/^\s*#+\s/);
-        rows = rows.slice(
-          section.range.start.line,
-          section.range.end.line + (isLastLineHeading ? 0 : 1)
-        );
-        // DO NOT remove the heading itself in card mode: include heading line
-        noteText = rows.join('\n');
-      } else {
-        // For block-level embeds (e.g., a list item with a ^block-id),
-        // extract the content of just that block using its range.
-        const rows = noteText.split('\n');
-        noteText = rows
-          .slice(section.range.start.line, section.range.end.line + 1)
-          .join('\n');
+  }
+  if (isSome(section)) {
+    if (newSectionIsHeading(section)) {
+      let rows = noteText.split('\n');
+      const thisHeadingLine = section.range.start.line;
+      const thisHeading = rows[thisHeadingLine];
+      const thisLevelMatch = thisHeading.match(/^(\s*#+)\s/);
+      const thisLevel = thisLevelMatch ? thisLevelMatch[1].length : 1;
+      let nextSiblingLine = rows.length;
+      for (let i = thisHeadingLine + 1; i < rows.length; i++) {
+        const m = rows[i].match(/^(\s*#+)\s/);
+        if (m && m[1].length <= thisLevel) {
+          nextSiblingLine = i;
+          break;
+        }
       }
+      // Omit the heading itself, include all content and nested subsections
+      rows = rows.slice(thisHeadingLine + 1, nextSiblingLine);
+      noteText = rows.join('\n');
+    } else {
+      // For block-level embeds (e.g., a list item with a ^block-id),
+      // extract the content of just that block using its range.
+      const rows = noteText.split('\n');
+      noteText = rows
+        .slice(section.range.start.line, section.range.end.line + 1)
+        .join('\n');
     }
   } else {
-    // If no fragment, or fragment not found as a section,
-    // treat as content of the entire note (excluding title)
+    // If no section found, treat as content of the entire note (excluding title)
     let rows = noteText.split('\n');
     rows.shift(); // Remove the title
     noteText = rows.join('\n');

@@ -403,9 +403,9 @@ This is the content of section 2.
       `);
       expect(note.sections).toHaveLength(3);
       expect(note.sections[0].label).toEqual('Section 1');
-      expect(note.sections[0].range).toEqual(Range.create(1, 0, 7, 0));
+      expect(note.sections[0].range).toEqual(Range.create(1, 0, 8, 0));
       expect(note.sections[1].label).toEqual('Section 1.1');
-      expect(note.sections[1].range).toEqual(Range.create(5, 0, 7, 0));
+      expect(note.sections[1].range).toEqual(Range.create(5, 0, 8, 0));
       expect(note.sections[2].label).toEqual('Section 2');
       expect(note.sections[2].range).toEqual(Range.create(9, 0, 11, 0));
     });
@@ -469,13 +469,18 @@ Another paragraph ^another-id
 - list item 1 ^li-1
 - list item 2 ^li-2
 `);
-      expect(note.sections).toHaveLength(2);
-      expect(note.sections[0].label).toEqual('list item 1');
-      expect(note.sections[0].canonicalId).toEqual('li-1');
-      expect(note.sections[0].linkableIds).toEqual(['li-1', '^li-1']);
-      expect(note.sections[1].label).toEqual('list item 2');
-      expect(note.sections[1].canonicalId).toEqual('li-2');
-      expect(note.sections[1].linkableIds).toEqual(['li-2', '^li-2']);
+      expect(note.sections).toHaveLength(3);
+      expect(note.sections[0].label).toEqual(
+        'list item 1 ^li-1list item 2 ^li-2'
+      );
+      expect(note.sections[0].canonicalId).toEqual('li-2');
+      expect(note.sections[0].linkableIds).toEqual(['li-2', '^li-2']);
+      expect(note.sections[1].label).toEqual('list item 1');
+      expect(note.sections[1].canonicalId).toEqual('li-1');
+      expect(note.sections[1].linkableIds).toEqual(['li-1', '^li-1']);
+      expect(note.sections[2].label).toEqual('list item 2');
+      expect(note.sections[2].canonicalId).toEqual('li-2');
+      expect(note.sections[2].linkableIds).toEqual(['li-2', '^li-2']);
     });
 
     it('should find block IDs in nested list items', () => {
@@ -483,10 +488,18 @@ Another paragraph ^another-id
 - list item 1
   - nested item ^nested-1
 `);
-      expect(note.sections).toHaveLength(1);
-      expect(note.sections[0].label).toEqual('nested item');
+      expect(note.sections).toHaveLength(3);
+      expect(note.sections[0].label).toEqual(
+        'list item 1nested item ^nested-1'
+      );
       expect(note.sections[0].canonicalId).toEqual('nested-1');
       expect(note.sections[0].linkableIds).toEqual(['nested-1', '^nested-1']);
+      expect(note.sections[1].label).toEqual('list item 1nested item');
+      expect(note.sections[1].canonicalId).toEqual('nested-1');
+      expect(note.sections[1].linkableIds).toEqual(['nested-1', '^nested-1']);
+      expect(note.sections[2].label).toEqual('nested item');
+      expect(note.sections[2].canonicalId).toEqual('nested-1');
+      expect(note.sections[2].linkableIds).toEqual(['nested-1', '^nested-1']);
     });
 
     it('should handle headings and block IDs together', () => {
