@@ -421,7 +421,79 @@ This is the content of section with wikilink
 This is the content of section with url`);
       expect(note.sections).toHaveLength(2);
       expect(note.sections[0].label).toEqual('Section with wikilink');
+      expect(note.sections[0].canonicalId).toEqual('section-with-wikilink');
+      expect(note.sections[0].linkableIds).toEqual(['section-with-wikilink']);
       expect(note.sections[1].label).toEqual('Section with url');
+      expect(note.sections[1].canonicalId).toEqual('section-with-url');
+      expect(note.sections[1].linkableIds).toEqual(['section-with-url']);
+    });
+  });
+
+  describe('Block IDs', () => {
+    it('should find block IDs in paragraphs', () => {
+      const note = createNoteFromMarkdown(`
+This is a paragraph with a block ID. ^my-block-id
+`);
+      expect(note.sections).toHaveLength(1);
+      expect(note.sections[0].label).toEqual(
+        'This is a paragraph with a block ID.'
+      );
+      expect(note.sections[0].canonicalId).toEqual('my-block-id');
+      expect(note.sections[0].linkableIds).toEqual(['my-block-id']);
+    });
+
+    it('should find block IDs at the end of a line', () => {
+      const note = createNoteFromMarkdown(`
+Another paragraph ^another-id
+`);
+      expect(note.sections).toHaveLength(1);
+      expect(note.sections[0].label).toEqual('Another paragraph');
+      expect(note.sections[0].canonicalId).toEqual('another-id');
+      expect(note.sections[0].linkableIds).toEqual(['another-id']);
+    });
+
+    it('should find block IDs in list items', () => {
+      const note = createNoteFromMarkdown(`
+- list item 1 ^li-1
+- list item 2 ^li-2
+`);
+      expect(note.sections).toHaveLength(2);
+      expect(note.sections[0].label).toEqual('list item 1');
+      expect(note.sections[0].canonicalId).toEqual('li-1');
+      expect(note.sections[0].linkableIds).toEqual(['li-1']);
+      expect(note.sections[1].label).toEqual('list item 2');
+      expect(note.sections[1].canonicalId).toEqual('li-2');
+      expect(note.sections[1].linkableIds).toEqual(['li-2']);
+    });
+
+    it('should find block IDs in nested list items', () => {
+      const note = createNoteFromMarkdown(`
+- list item 1
+  - nested item ^nested-1
+`);
+      expect(note.sections).toHaveLength(2);
+      expect(note.sections[0].label).toEqual('list item 1');
+      expect(note.sections[0].canonicalId).toBeUndefined();
+      expect(note.sections[0].linkableIds).toEqual([]);
+      expect(note.sections[1].label).toEqual('nested item');
+      expect(note.sections[1].canonicalId).toEqual('nested-1');
+      expect(note.sections[1].linkableIds).toEqual(['nested-1']);
+    });
+
+    it('should handle headings and block IDs together', () => {
+      const note = createNoteFromMarkdown(`
+# My Heading
+Some content.
+
+This is a paragraph with an ID. ^p-id
+`);
+      expect(note.sections).toHaveLength(2);
+      expect(note.sections[0].label).toEqual('My Heading');
+      expect(note.sections[0].canonicalId).toEqual('my-heading');
+      expect(note.sections[0].linkableIds).toEqual(['my-heading']);
+      expect(note.sections[1].label).toEqual('This is a paragraph with an ID.');
+      expect(note.sections[1].canonicalId).toEqual('p-id');
+      expect(note.sections[1].linkableIds).toEqual(['p-id']);
     });
   });
 

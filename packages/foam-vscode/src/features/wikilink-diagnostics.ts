@@ -257,31 +257,19 @@ function createUnknownSectionDiagnostic(
 function createSectionSuggestions(
   resource: Resource
 ): vscode.DiagnosticRelatedInformation[] {
-  return resource.sections.flatMap(s => {
-    const infos: vscode.DiagnosticRelatedInformation[] = [];
+  return resource.sections.flatMap(section => {
     const location = new vscode.Location(
       toVsCodeUri(resource.uri),
-      toVsCodePosition(s.range.start)
+      toVsCodePosition(section.range.start)
     );
-    if (s.isHeading) {
-      if (s.id) {
-        infos.push(new vscode.DiagnosticRelatedInformation(location, s.label));
-      }
-      if (s.blockId) {
-        infos.push(
-          new vscode.DiagnosticRelatedInformation(location, s.blockId)
-        );
-      }
-    } else {
-      if (s.blockId) {
-        infos.push(
-          new vscode.DiagnosticRelatedInformation(location, s.blockId)
-        );
-      } else if (s.id) {
-        infos.push(new vscode.DiagnosticRelatedInformation(location, s.id));
-      }
-    }
-    return infos;
+    // Create a suggestion for each linkable ID (slugs and block IDs).
+    return section.linkableIds.map(linkId => {
+      const isBlockId = linkId.startsWith('^');
+      // For block IDs, the message is the ID itself (e.g., `^my-id`).
+      // For heading slugs, the message is the user-friendly heading label.
+      const message = isBlockId ? linkId : section.label;
+      return new vscode.DiagnosticRelatedInformation(location, message);
+    });
   });
 }
 
@@ -345,10 +333,9 @@ export class IdentifierResolver implements vscode.CodeActionProvider {
   private createUnknownSectionActions(
     diagnostic: vscode.Diagnostic
   ): vscode.CodeAction[] {
-    const sectionIds = diagnostic.relatedInformation.map(info => info.message);
-    return sectionIds
-      .map(sectionId =>
-        createReplaceSectionCommand(diagnostic, sectionId, this.workspace)
+    return diagnostic.relatedInformation
+      .map(info =>
+        createReplaceSectionCommand(diagnostic, info, this.workspace)
       )
       .filter((action): action is vscode.CodeAction => action !== null);
   }
@@ -357,42 +344,66 @@ export class IdentifierResolver implements vscode.CodeActionProvider {
 /**
  * Creates a Code Action to fix a broken section link by replacing it with a valid one.
  * @param diagnostic The `UNKNOWN_SECTION_CODE` diagnostic.
- * @param sectionId The ID of a valid section to suggest as a replacement.
+ * @param suggestion The diagnostic info for a valid section to suggest as a replacement.
  * @param workspace The Foam workspace.
  * @returns A `vscode.CodeAction` or `null` if the target resource can't be found.
  */
 const createReplaceSectionCommand = (
   diagnostic: vscode.Diagnostic,
-  sectionId: string,
+  suggestion: vscode.DiagnosticRelatedInformation,
   workspace: FoamWorkspace
 ): vscode.CodeAction | null => {
-  // Get the target resource from the diagnostic's related information
-  const targetUri = fromVsCodeUri(
-    diagnostic.relatedInformation[0].location.uri
-  );
+  const targetUri = fromVsCodeUri(suggestion.location.uri);
   const targetResource = workspace.get(targetUri);
-  const section = targetResource.sections.find(s => s.id === sectionId);
-
-  if (!section) {
-    return null; // Should not happen if IDs are correctly passed
+  if (!targetResource) {
+    return null;
   }
 
-  const replacementValue = section.id;
+  // Find the exact section using the location from the suggestion.
+  const section = targetResource.sections.find(
+    s =>
+      s.range.start.line === suggestion.location.range.start.line &&
+      s.range.start.character === suggestion.location.range.start.character
+  );
+
+  if (!section) {
+    return null;
+  }
+
+  // The suggestion message is either the heading label or the block ID (e.g., `^my-id`).
+  const suggestedMessage = suggestion.message;
+  const isBlockId = suggestedMessage.startsWith('^');
+
+  let replacementValue: string;
+  if (isBlockId) {
+    // The message is the block ID itself (e.g. `^my-id`), which is a valid linkableId.
+    // We just need to remove the `^` for the final link fragment.
+    replacementValue = suggestedMessage.substring(1);
+  } else {
+    // The message is the heading label. We need to find the corresponding slug.
+    // The slug is the linkableId that is NOT a block ID.
+    replacementValue = section.linkableIds.find(id => !id.startsWith('^'));
+    if (isNone(replacementValue)) {
+      // This should not happen if the section was generated correctly.
+      // It means we have a heading without a slug.
+      return null;
+    }
+  }
+
+  const actionTitle = `Use ${isBlockId ? 'block' : 'heading'} "${
+    section.label
+  }"`;
 
   const action = new vscode.CodeAction(
-    `Use ${section.isHeading ? 'heading' : 'block'} "${
-      section.isHeading ? section.label : section.blockId || section.id
-    }"`, // Use blockId for display if available, otherwise id
+    actionTitle,
     vscode.CodeActionKind.QuickFix
   );
   action.command = {
     command: REPLACE_TEXT_COMMAND.name,
-    title: `Use ${section.isHeading ? 'heading' : 'block'} "${
-      section.isHeading ? section.label : section.blockId || section.id
-    }"`, // Use blockId for display if available, otherwise id
+    title: actionTitle,
     arguments: [
       {
-        value: section.isHeading ? section.id : section.blockId || section.id, // Insert blockId for non-headings, id for headings
+        value: replacementValue,
         range: new vscode.Range(
           diagnostic.range.start.line,
           diagnostic.range.start.character + 1,
@@ -407,8 +418,8 @@ const createReplaceSectionCommand = (
 };
 
 /**
- * Creates a Code Action to fix an ambiguous link by replacing the link text
- * with an unambiguous identifier for the chosen file.
+ * Creates a Code Action to fix an ambiguous identifier by replacing it with a
+ * non-ambiguous identifier.
  * @param diagnostic The `AMBIGUOUS_IDENTIFIER_CODE` diagnostic.
  * @param target The URI of the specific file the user wants to link to.
  * @param defaultExtension The workspace's default file extension.

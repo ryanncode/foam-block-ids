@@ -16,6 +16,7 @@ import { Range } from '../../core/model/range'; // Add this import
 import { TextEdit } from '../../core/services/text-edit';
 import { isNone, isSome } from '../../core/utils';
 import { stripFrontMatter } from '../../core/utils/md';
+import { toSlug } from '../../utils/slug';
 import {
   asAbsoluteWorkspaceUri,
   isVirtualWorkspace,
@@ -233,7 +234,8 @@ function fullExtractor(
     ? Resource.findSection(note, linkFragment)
     : null;
   if (isSome(section)) {
-    if (section.isHeading) {
+    const isHeading = toSlug(section.label) === section.canonicalId;
+    if (isHeading) {
       // For headings, extract all content from that heading to the next.
       let rows = noteText.split('\n');
       // Find the next heading after this one
@@ -286,7 +288,8 @@ function contentExtractor(
     section = note.sections.length ? note.sections[0] : null;
   }
   if (isSome(section)) {
-    if (section.isHeading) {
+    const isHeading = toSlug(section.label) === section.canonicalId;
+    if (isHeading) {
       // For headings, extract the content *under* the heading.
       let rows = noteText.split('\n');
       const isLastLineHeading = rows[section.range.end.line]?.match(/^\s*#+\s/);

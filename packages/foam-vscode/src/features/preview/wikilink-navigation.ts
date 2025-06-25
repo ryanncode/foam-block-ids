@@ -79,31 +79,38 @@ export const markdownItWikilinkNavigation = (
         if (section) {
           linkTitle += `#${section}`;
           // Find the corresponding section or block in the target resource.
-          // This lookup works for both heading labels (by comparing slugs) and block IDs (by direct match).
-          const foundSection = resource.sections.find(
-            s => toSlug(s.label) === toSlug(section) || s.blockId === section
+          const lookupId = section.startsWith('^')
+            ? section.substring(1)
+            : toSlug(section);
+          const foundSection = resource.sections.find(s =>
+            s.linkableIds.includes(lookupId)
           );
 
           let fragment;
           if (foundSection) {
-            // If the link points to a heading, the fragment is the heading's generated ID.
-            if (foundSection.isHeading) {
-              fragment = foundSection.id;
+            // If the link points to a heading, the fragment is its canonical ID (which is a slug).
+            // We identify a heading by checking if its canonicalId is a slug of its label.
+            const isHeading =
+              toSlug(foundSection.label) === foundSection.canonicalId;
+
+            if (isHeading) {
+              fragment = foundSection.canonicalId;
             } else {
-              // If the link points to a block ID, we need to find the nearest parent heading
-              // to use as the navigation anchor. This ensures that clicking the link scrolls
-              // to the correct area in the preview.
+              // If it's a block, we need to find the nearest parent heading
+              // to use as the navigation anchor, as blocks don't have anchors.
               const parentHeading = resource.sections
                 .filter(
                   s =>
-                    s.isHeading &&
+                    toSlug(s.label) === s.canonicalId && // is a heading
                     s.range.start.line < foundSection.range.start.line
                 )
                 // Sort headings by line number descending to find the closest one *before* the block.
                 .sort((a, b) => b.range.start.line - a.range.start.line)[0];
 
-              // Use the parent heading's ID if found; otherwise, fall back to a slug of the block ID.
-              fragment = parentHeading ? parentHeading.id : toSlug(section);
+              // Use the parent heading's ID if found; otherwise, fall back to a slug of the section.
+              fragment = parentHeading
+                ? parentHeading.canonicalId
+                : toSlug(section);
             }
           } else {
             // If no specific section is found, fall back to a slug of the section identifier.

@@ -22,6 +22,7 @@ import { Location } from '../core/model/location';
 import { getNoteTooltip, getFoamDocSelectors } from '../services/editor';
 import { isSome } from '../core/utils';
 import { MarkdownLink } from '../core/services/markdown-link';
+import { toSlug } from '../utils/slug';
 
 /**
  * Extracts a range of content from a multi-line string.
@@ -157,7 +158,8 @@ export class HoverProvider implements vscode.HoverProvider {
         if (isSome(section)) {
           // For headings, we read the file content and slice out the range of the section.
           // This includes the heading line and all content until the next heading.
-          if (section.isHeading) {
+          const isHeading = toSlug(section.label) === section.canonicalId;
+          if (isHeading) {
             const fileContent = await this.workspace.readAsMarkdown(
               targetFileUri
             );

@@ -64,12 +64,15 @@ export const createTestNote = (params: {
     properties: {},
     title: params.title ?? strToUri(params.uri).getBasename(),
     definitions: params.definitions ?? [],
-    sections: (params.sections ?? []).map(label => ({
-      id: slugger.slug(label),
-      label: label,
-      range: Range.create(0, 0, 1, 0),
-      isHeading: true,
-    })),
+    sections: (params.sections ?? []).map(label => {
+      const slug = slugger.slug(label);
+      return {
+        label: label,
+        range: Range.create(0, 0, 1, 0),
+        canonicalId: slug,
+        linkableIds: [slug],
+      };
+    }),
     tags:
       params.tags?.map(t => ({
         label: t,
